@@ -1,10 +1,10 @@
 {
-  "id": "./",
+  "id": "plano-corrida-pwa",
   "name": "Plano de Corrida",
   "short_name": "Corrida",
   "description": "Treinos de corrida personalizados com cronômetro, voz e ritmo.",
   "lang": "pt-BR",
-  "start_url": "./",
+  "start_url": "./treino.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
