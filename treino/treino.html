@@ -237,6 +237,7 @@ html[data-theme="oceano"]{--acc:#0284c7;--ok:#0d9488;--run:#0284c7}html[data-the
 /* Resumo opcional dos intervalos dentro de cada card */
 .interval-details{grid-column:1/-1;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--tx);font-size:13px;line-height:1.6;overflow-wrap:anywhere}
 .interval-details[hidden]{display:none}
+.interval-item{display:block;padding:7px 0;line-height:1.45}.interval-item+.interval-item{border-top:1px solid var(--line)}
 .interval-toggle{border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--acc);font-size:13px;font-weight:700;padding:8px 12px;min-height:36px;cursor:pointer;margin-top:8px}
 .interval-toggle:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 </style>
@@ -373,7 +374,7 @@ function render(){
     d.innerHTML=`<label class="ck"><input type="checkbox" ${ok?'checked':''} onchange="toggleDone(${i},this.checked)"><span></span></label>
       <div class="det"><h3 onclick="openEditor(${i})">${esc(wo.title)}</h3><div class="pills"><span class="tag">⏱ ${fmtT(totalSec(wo))}</span><span class="tag">🏃 ${fmtT(run)}</span><span class="tag">≈ ${rnd(workoutKm(wo),2)} km</span><span class="tag">${wo.steps.length} etapas</span></div><button type="button" class="interval-toggle" aria-expanded="false" aria-controls="interval-detail-${i}" onclick="toggleIntervalDetails(${i},this)">▾ Ver intervalos</button></div>
       <button class="play" onclick="startWorkout(${i})" aria-label="Iniciar">▶</button>
-      <div class="interval-details" id="interval-detail-${i}" hidden>${esc(intervalSummary(wo))}</div>
+      <div class="interval-details" id="interval-detail-${i}" hidden>${intervalSummary(wo).split(" · ").map(item=>`<div class="interval-item">${esc(item)}</div>`).join("")}</div>
       <div class="tl">${wo.steps.map(x=>`<i class="t-${x.type}" style="flex:${x.dur}"></i>`).join('')}</div>`;
     list.appendChild(d);
   });

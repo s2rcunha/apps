@@ -1,5 +1,5 @@
 // Mude o número da versão (plano-corrida-vN) sempre que atualizar o treino.html no servidor
-const V='plano-corrida-v11';
+const V='plano-corrida-v12';
 const ASSETS=['./treino.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/icon-maskable-512.png','./icons/apple-touch-icon.png'];
 
 self.addEventListener('install',e=>{
