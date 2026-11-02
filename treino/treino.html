@@ -257,6 +257,18 @@ html[data-theme="oceano"]{--acc:#0284c7;--ok:#0d9488;--run:#0284c7}html[data-the
 .feedback-total{text-align:center;font-size:23px;font-weight:800;color:var(--acc);margin-bottom:12px}
 .feedback-buttons{display:flex;gap:10px;margin-top:16px}.feedback-buttons .btn{flex:1;min-height:49px}
 @media(max-width:350px){.feedback-emoji-grid{gap:4px}.feedback-face{min-height:72px}.feedback-face span{font-size:24px}}
+
+/* Diálogos padronizados — substituem prompt/alert/confirm nativos */
+#appDialog{background:rgba(5,10,18,.70);align-items:center;justify-content:center;padding:16px;z-index:11000}
+.app-dialog-sheet{width:min(100%,430px);max-height:min(85dvh,680px);overflow-y:auto;background:var(--sf);color:var(--tx);border-radius:22px;padding:22px;box-shadow:0 20px 60px #0005}
+.app-dialog-sheet h2{font-size:21px;line-height:1.3;margin:0 0 12px;color:var(--tx)}
+.app-dialog-sheet p{color:var(--mut);line-height:1.5;margin:0 0 16px;white-space:pre-wrap}
+.app-dialog-sheet label{display:block;font-weight:650;font-size:13px;margin:12px 0 5px}
+.app-dialog-sheet input{width:100%;min-height:48px;padding:11px 13px;font-size:17px}
+.app-dialog-sheet .dialog-actions{display:flex;gap:9px;margin-top:20px}
+.app-dialog-sheet .dialog-actions .btn{flex:1;min-height:48px}
+.app-dialog-error{color:var(--red);font-size:13px;min-height:15px;margin-top:5px}
+
 </style>
 </head>
 <body>
@@ -329,8 +341,10 @@ html[data-theme="oceano"]{--acc:#0284c7;--ok:#0d9488;--run:#0284c7}html[data-the
     <p class="photo-note">Tire uma selfie ou foto e o app vai adicionar automaticamente os detalhes do treino na imagem, pronta para postar.</p>
     <div class="photo-actions" id="photoLiveActions">
       <button class="btn" onclick="switchCamera()">🔄 Trocar câmera</button>
+      <button class="btn" onclick="document.getElementById('photoPicker').click()">🖼️ Galeria</button>
       <button class="btn ok" onclick="captureWorkoutPhoto()">📸 Tirar foto</button>
     </div>
+    <input id="photoPicker" type="file" accept="image/*" hidden onchange="pickWorkoutPhoto(this)">
     <div class="photo-secondary" id="photoPreviewActions" style="display:none">
       <button class="btn" onclick="retakeWorkoutPhoto()">↺ Refazer</button>
       <button class="btn" onclick="downloadWorkoutPhoto()">⬇️ Baixar</button>
@@ -339,7 +353,41 @@ html[data-theme="oceano"]{--acc:#0284c7;--ok:#0d9488;--run:#0284c7}html[data-the
   </div>
 </div>
 
+<div id="appDialog" class="modal" role="dialog" aria-modal="true" aria-labelledby="dialogTitle"><div class="app-dialog-sheet"><h2 id="dialogTitle"></h2><div id="dialogBody"></div><div id="dialogError" class="app-dialog-error" aria-live="polite"></div><div id="dialogActions" class="dialog-actions"></div></div></div>
 <script>
+// Modais globais acessíveis por teclado, com suporte a validação de formulário.
+let dialogResolver=null,dialogPreviousFocus=null;
+function appDialog({title='Atenção',message='',fields=[],confirmLabel='Confirmar',cancelLabel='Cancelar',danger=false,info=false,validate=null}={}){
+ return new Promise(resolve=>{
+  const root=document.getElementById('appDialog');
+  if(dialogResolver){dialogResolver(null);dialogResolver=null}
+  dialogPreviousFocus=document.activeElement;
+  document.getElementById('dialogTitle').textContent=title;
+  const body=document.getElementById('dialogBody');body.replaceChildren();
+  if(message){const p=document.createElement('p');p.textContent=message;body.append(p)}
+  fields.forEach(f=>{const label=document.createElement('label');label.htmlFor='dlg_'+f.id;label.textContent=f.label||f.id;
+   const input=document.createElement('input');input.id='dlg_'+f.id;input.type=f.type||'text';input.value=String(f.value??'');
+   if(f.placeholder)input.placeholder=f.placeholder;if(f.min!==undefined)input.min=f.min;if(f.max!==undefined)input.max=f.max;if(f.step!==undefined)input.step=f.step;
+   if(f.maxLength)input.maxLength=f.maxLength;input.autocomplete='off';label.append(input);body.append(label);
+  });
+  document.getElementById('dialogError').textContent='';
+  const acts=document.getElementById('dialogActions');acts.replaceChildren();
+  function done(value){dialogResolver=null;root.classList.remove('active');document.removeEventListener('keydown',keyHandler,true);dialogPreviousFocus?.focus?.();resolve(value)}
+  function keyHandler(e){if(!root.classList.contains('active'))return;
+   if(e.key==='Escape'){e.preventDefault();done(null)}
+   if(e.key==='Tab'){const focusable=[...root.querySelectorAll('input,button')];const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}
+  }
+  if(!info){const cancel=document.createElement('button');cancel.type='button';cancel.className='btn';cancel.textContent=cancelLabel;cancel.onclick=()=>done(null);acts.append(cancel)}
+  const ok=document.createElement('button');ok.type='button';ok.className='btn '+(danger?'danger':'ok');ok.textContent=info?'Entendi':confirmLabel;
+  ok.onclick=()=>{const values=Object.fromEntries(fields.map(f=>[f.id,document.getElementById('dlg_'+f.id).value]));const err=typeof validate==='function'?validate(values):null;if(err){document.getElementById('dialogError').textContent=err;return}done(fields.length?values:true)};
+  acts.append(ok);root.classList.add('active');dialogResolver=resolve;document.addEventListener('keydown',keyHandler,true);
+  const first=root.querySelector('input')||ok;setTimeout(()=>first.focus(),0);
+ });
+}
+const appConfirm=(message,title='Confirmação',danger=false)=>appDialog({title,message,danger,confirmLabel:danger?'Excluir':'Confirmar'}).then(Boolean);
+const appInfo=(message,title='Aviso')=>appDialog({title,message,info:true});
+const appAsk=(title,fields,validate,message='')=>appDialog({title,fields,validate,message,confirmLabel:'Salvar'});
+
 // ---------- IndexedDB ----------
 const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('corrida_db',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 async function dbGet(k){const d=await idb();return new Promise(res=>{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>res(undefined)})}
@@ -348,9 +396,9 @@ async function dbSet(k,v){const d=await idb();return new Promise((res,rej)=>{con
 const uid=()=>Math.random().toString(36).slice(2,9);
 const newWeek=()=>({id:uid(),workouts:[]});
 let plan={cur:0,weeks:[newWeek()]}, done={};
-const save=()=>dbSet('bundle',{plan,done}).catch(()=>alert('Erro ao salvar no IndexedDB.'));
+const save=()=>dbSet('bundle',{plan,done}).catch(()=>appInfo('Erro ao salvar no IndexedDB.'));
 let weights=[];let history=[],activePlanName='Meu plano',savedPlans=[],appSettings={theme:'laranja',voice:true};
-let photoStream=null,photoFacing='user',photoEntryId=null,photoBlob=null;
+let photoStream=null,photoFacing='user',photoEntryId=null,photoBlob=null,photoSource='camera';
 const storeExtra=()=>Promise.all([dbSet('history',history),dbSet('plans',savedPlans),dbSet('activeName',activePlanName),dbSet('settings',appSettings),dbSet('weights',weights)]);
 const clone=x=>JSON.parse(JSON.stringify(x));
 const rnd=(n,d=1)=>Number.isFinite(n)?n.toFixed(d).replace('.',','):'0';
@@ -432,30 +480,30 @@ function toast(msg,undo){
 function afterDone(w,k){if(weekDone(w))toast(`🎉 Semana ${plan.weeks.indexOf(w)+1} concluída! Ela foi para ⋯ › Semanas concluídas.`,()=>{delete done[k];plan.cur=plan.weeks.indexOf(w);save();render()})}
 function selWeek(i){plan.cur=i;save();render()}
 function toggleDone(i,v){const w=plan.weeks[plan.cur],k=wkKey(w,w.workouts[i]);v?done[k]=true:delete done[k];save();render();if(v&&!view)afterDone(w,k)}
-function delWorkout(i){if(!confirm('Excluir este treino?'))return;plan.weeks[plan.cur].workouts.splice(i,1);save();render()}
+async function delWorkout(i){if(!await appConfirm('Excluir este treino?'))return;plan.weeks[plan.cur].workouts.splice(i,1);save();render()}
 function dupWorkout(i){const w=plan.weeks[plan.cur],c=JSON.parse(JSON.stringify(w.workouts[i]));c.id=uid();c.title+=' (cópia)';w.workouts.splice(i+1,0,c);save();render()}
 
 // ---------- semanas ----------
-function setWeeks(){
-  const n=parseInt(prompt('Quantas semanas terá o plano?',plan.weeks.length),10);
+async function setWeeks(){
+  const n=parseInt((await appAsk('Número de semanas',[{id:'n',label:'Semanas (1 a 104)',type:'number',value:plan.weeks.length,min:1,max:104}],v=>!Number.isInteger(Number(v.n))||Number(v.n)<1||Number(v.n)>104?'Informe de 1 a 104 semanas':null))?.n,10);
   if(!n||n<1||n>104)return;
-  if(n<plan.weeks.length&&!confirm(`Isso exclui as semanas ${n+1} a ${plan.weeks.length} com seus treinos. Continuar?`))return;
+  if(n<plan.weeks.length&&!await appConfirm(`Isso exclui as semanas ${n+1} a ${plan.weeks.length} com seus treinos. Continuar?`))return;
   while(plan.weeks.length<n)plan.weeks.push(newWeek());
   plan.weeks.length=n;plan.cur=Math.min(plan.cur,n-1);save();render();
 }
 function dupWeek(){
-  if(!curVisible())return alert('Abra a semana em ⋯ › Semanas concluídas para fazer isso.');
+  if(!curVisible())return appInfo('Abra a semana em ⋯ › Semanas concluídas para fazer isso.');
   const c=JSON.parse(JSON.stringify(plan.weeks[plan.cur]));c.id=uid();c.workouts.forEach(w=>w.id=uid());
   plan.weeks.splice(plan.cur+1,0,c);plan.cur++;save();render();
 }
-function delWeek(){
-  if(!curVisible())return alert('Abra a semana em ⋯ › Semanas concluídas para fazer isso.');
-  if(plan.weeks.length<2)return alert('O plano precisa ter ao menos 1 semana. Use "Limpar tudo" para recomeçar.');
-  if(!confirm('Excluir a semana atual e seus treinos?'))return;
+async function delWeek(){
+  if(!curVisible())return appInfo('Abra a semana em ⋯ › Semanas concluídas para fazer isso.');
+  if(plan.weeks.length<2)return appInfo('O plano precisa ter ao menos 1 semana. Use "Limpar tudo" para recomeçar.');
+  if(!await appConfirm('Excluir a semana atual e seus treinos?'))return;
   plan.weeks.splice(plan.cur,1);plan.cur=Math.min(plan.cur,plan.weeks.length-1);view=false;save();render();
 }
-function clearAll(){
-  if(!confirm('Apagar TODAS as semanas, treinos e o progresso? Não dá para desfazer.'))return;
+async function clearAll(){
+  if(!await appConfirm('Apagar TODAS as semanas, treinos e o progresso? Não dá para desfazer.'))return;
   plan={cur:0,weeks:[newWeek()]};done={};view=false;save();render();
 }
 function exportPlan(){
@@ -471,11 +519,11 @@ function validPack(d){
  for(const x of wo.steps){if(!['run','walk','cool'].includes(x.type)||!Number.isFinite(x.dur)||x.dur<=0||x.dur>86400||!Number.isFinite(x.kmh)||x.kmh<0||x.kmh>40||typeof x.name!=='string')throw Error('Etapa inválida');}}
  }return true;
 }
-function importPlan(inp){
+async function importPlan(inp){
  const f=inp.files[0];if(!f)return;
- f.text().then(t=>{const d=JSON.parse(t);validPack(d);if(!confirm('Importar este plano? O plano atual será guardado em Meus planos.'))return;
+ f.text().then(async t=>{const d=JSON.parse(t);validPack(d);if(!await appConfirm('Importar este plano? O plano atual será guardado em Meus planos.'))return;
  savedPlans.push({id:uid(),name:activePlanName,plan:clone(plan),done:clone(done)});
- plan=d.plan;done=d.done||{};activePlanName=f.name.replace(/\.json$/i,'');plan.cur=0;view=false;storeExtra();save();render();toast('Plano importado. O anterior está em Meus planos.')}).catch(e=>alert('Arquivo inválido: '+e.message));inp.value='';
+ plan=d.plan;done=d.done||{};activePlanName=f.name.replace(/\.json$/i,'');plan.cur=0;view=false;storeExtra();save();render();toast('Plano importado. O anterior está em Meus planos.')}).catch(e=>appInfo('Arquivo inválido: '+e.message));inp.value='';
 }
 
 // ---------- editor de treino ----------
@@ -543,7 +591,7 @@ function eSp(i,j,dir){
 }
 function eSpT(i,j,el){const s=eS(i,j);s.kmh=parseVal(ed.data.unit,el.value);s.distanceKm=0;eSpShow(i,j)}
 function eSpShow(i,j){const s=eS(i,j),u=ed.data.unit;eId('p',i,j).value=spVal(s,u);eId('q',i,j).textContent=spEq(s,u);eSum()}
-function eDistance(i,j,el){const s=eS(i,j),v=Number(String(el.value).replace(',','.'));if(!Number.isFinite(v)||v<0||v>200)return alert('Distância inválida');if(v&&v*3600/s.dur>40)return alert('Essa distância exigiria mais de 40 km/h. Ajuste o tempo ou a distância.');s.distanceKm=v;if(s.distanceKm&&s.dur>0)s.kmh=s.distanceKm*3600/s.dur;renderEditor()}
+function eDistance(i,j,el){const s=eS(i,j),v=Number(String(el.value).replace(',','.'));if(!Number.isFinite(v)||v<0||v>200)return appInfo('Distância inválida');if(v&&v*3600/s.dur>40)return appInfo('Essa distância exigiria mais de 40 km/h. Ajuste o tempo ou a distância.');s.distanceKm=v;if(s.distanceKm&&s.dur>0)s.kmh=s.distanceKm*3600/s.dur;renderEditor()}
 function eN(i,dir){const it=ed.data.items[i];it.n=Math.max(1,Math.min(99,it.n+dir));document.getElementById('n'+i).textContent=it.n+'×';eSum()}
 function eUnit(u){ed.data.unit=u;renderEditor()}
 function eType(i,j,t){const s=eS(i,j);if(s.name===NM[s.type])s.name=NM[t];if(s.kmh===DK[s.type])s.kmh=DK[t];s.type=t;renderEditor()}
@@ -556,8 +604,8 @@ function eAddIn(i){ed.data.items[i].steps.push(mk('walk',60));renderEditor()}
 function eAddRep(){ed.data.items.push({k:'r',n:5,steps:[mk('run',180),mk('walk',120,'RECUPERAÇÃO')]});renderEditor();eScroll()}
 function saveWorkout(){
   const d=ed.data,f=flat(d).filter(x=>x.dur>0);
-  if(!f.length)return alert('Adicione ao menos uma etapa.');
-  if(f.some(x=>!Number.isFinite(x.kmh)||x.kmh<0||x.kmh>40))return alert('Há uma velocidade inválida. Verifique as distâncias e durações.');
+  if(!f.length)return appInfo('Adicione ao menos uma etapa.');
+  if(f.some(x=>!Number.isFinite(x.kmh)||x.kmh<0||x.kmh>40))return appInfo('Há uma velocidade inválida. Verifique as distâncias e durações.');
   d.title=d.title.trim()||'Treino';
   d.steps=f.map(x=>({name:x.name,type:x.type,dur:x.dur,kmh:x.kmh||0,mode:x.kmh?d.unit:'',...(x.distanceKm?{distanceKm:x.distanceKm}:{})}));
   const w=plan.weeks[plan.cur];
@@ -617,14 +665,14 @@ function changeLiveSpeed(delta){if(!cw)return;const s=cw.steps[cStep];const k=Ma
 
 function prevStep(){if(cStep>0){cStep--;resetStep()}}
 function repeatStep(){resetStep()}
-function nextStep(){if(cStep<cw.steps.length-1){cStep++;resetStep()}else if(confirm('Concluir e registrar este treino?'))finishWorkout()}
+async function nextStep(){if(cStep<cw.steps.length-1){cStep++;resetStep()}else if(await appConfirm('Concluir e registrar este treino?'))finishWorkout()}
 function finishWorkout(){
   if(playing&&activeStartAt)elapsedActive+=Math.max(0,Date.now()-activeStartAt);activeStartAt=0;clearInterval(timer);playing=false;
   if(voiceEnabled('finish'))speak('Parabéns! Treino concluído com sucesso!');
   const fw=cWeek,fk=wkKey(cWeek,cw);done[fk]=true;history.unshift({id:uid(),title:cw.title,planName:activePlanName,week:plan.weeks.indexOf(cWeek)+1,at:new Date().toISOString(),plannedSeconds:totalSec(cw),plannedKm:workoutKm(cw),actualSeconds:Math.round(elapsedActive/1000),actualKm:null,rpe:null});storeExtra();save();closePlayer(true);render();toast('🎉 Treino concluído!');setTimeout(()=>collectWorkoutFeedback(history[0].id),120);if(!view)afterDone(fw,fk);
 }
-function closePlayer(finished=false){
-  if(!finished&&cw&&!confirm('Sair do treino? Seu progresso será salvo para continuar depois.'))return;
+async function closePlayer(finished=false){
+  if(!finished&&cw&&!await appConfirm('Sair do treino? Seu progresso será salvo para continuar depois.'))return;
   if(!finished&&cw&&playing){loop();if(!cw)return;elapsedActive+=Math.max(0,Date.now()-activeStartAt);activeStartAt=0;clearInterval(timer);playing=false;endAt=0}
   if(!finished&&cw)persistSession();if(finished)dbSet('session',null);
    clearInterval(timer);playing=false;
@@ -720,18 +768,18 @@ function showPanel(which){let html=`<div class="eh1"><button class="icon" onclic
  document.getElementById('panelContent').innerHTML=html;document.getElementById('extraPanel').classList.add('active');}
 function editHistory(i){if(history[i])openFeedback(history[i].id,'distance',true)}
 function setTheme(t){appSettings.theme=t;getTheme();storeExtra();showPanel('settings')}
-function saveCurrentAsPlan(){const name=prompt('Nome da cópia do plano:',activePlanName);if(!name?.trim())return;savedPlans.push({id:uid(),name:name.trim(),plan:clone(plan),done:clone(done)});storeExtra();showPanel('plans')}
-function renameCurrentPlan(){const name=prompt('Nome do plano atual:',activePlanName);if(!name?.trim())return;activePlanName=name.trim();storeExtra();showPanel('plans')}
-function activatePlan(i){if(!confirm('Trocar para este plano? O atual ficará salvo automaticamente.'))return;const x=savedPlans.splice(i,1)[0];savedPlans.push({id:uid(),name:activePlanName,plan:clone(plan),done:clone(done)});plan=clone(x.plan);done=clone(x.done);activePlanName=x.name;plan.cur=0;view=false;save();storeExtra();closePanel()}
-function deleteSavedPlan(i){if(!confirm('Excluir esta cópia do plano?'))return;savedPlans.splice(i,1);storeExtra();showPanel('plans')}
+async function saveCurrentAsPlan(){const name=(await appAsk('Salvar uma cópia do plano',[{id:'name',label:'Nome do plano',value:activePlanName,maxLength:80}],v=>!v.name.trim()?'Informe o nome do plano':null))?.name;if(!name?.trim())return;savedPlans.push({id:uid(),name:name.trim(),plan:clone(plan),done:clone(done)});storeExtra();showPanel('plans')}
+async function renameCurrentPlan(){const name=(await appAsk('Renomear plano',[{id:'name',label:'Nome do plano',value:activePlanName,maxLength:80}],v=>!v.name.trim()?'Informe o nome do plano':null))?.name;if(!name?.trim())return;activePlanName=name.trim();storeExtra();showPanel('plans')}
+async function activatePlan(i){if(!await appConfirm('Trocar para este plano? O atual ficará salvo automaticamente.'))return;const x=savedPlans.splice(i,1)[0];savedPlans.push({id:uid(),name:activePlanName,plan:clone(plan),done:clone(done)});plan=clone(x.plan);done=clone(x.done);activePlanName=x.name;plan.cur=0;view=false;save();storeExtra();closePanel()}
+async function deleteSavedPlan(i){if(!await appConfirm('Excluir esta cópia do plano?'))return;savedPlans.splice(i,1);storeExtra();showPanel('plans')}
 function downloadJson(data,name){const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function exportBackup(){downloadJson({backupVersion:1,createdAt:new Date().toISOString(),plan,done,history,savedPlans,activePlanName,appSettings,weights},'corrida-backup-completo.json')}
-async function restoreBackup(el){const f=el.files[0];if(!f)return;try{const d=JSON.parse(await f.text());validPack(d);if(!Array.isArray(d.history)||!Array.isArray(d.savedPlans))throw Error('Backup incompleto');for(const x of d.savedPlans)validPack({plan:x.plan});if(!confirm('Restaurar backup completo? Isso substituirá seus dados atuais. Exporte um backup antes de continuar.'))return;
- plan=d.plan;done=d.done||{};history=d.history;savedPlans=d.savedPlans;activePlanName=d.activePlanName||'Meu plano';appSettings=d.appSettings||{theme:'laranja'};weights=Array.isArray(d.weights)?d.weights:[];getTheme();await save();await storeExtra();closePanel();toast('Backup restaurado.')}catch(e){alert('Falha ao restaurar: '+e.message)}finally{el.value=''}}
+async function restoreBackup(el){const f=el.files[0];if(!f)return;try{const d=JSON.parse(await f.text());validPack(d);if(!Array.isArray(d.history)||!Array.isArray(d.savedPlans))throw Error('Backup incompleto');for(const x of d.savedPlans)validPack({plan:x.plan});if(!await appConfirm('Restaurar backup completo? Isso substituirá seus dados atuais. Exporte um backup antes de continuar.'))return;
+ plan=d.plan;done=d.done||{};history=d.history;savedPlans=d.savedPlans;activePlanName=d.activePlanName||'Meu plano';appSettings=d.appSettings||{theme:'laranja'};weights=Array.isArray(d.weights)?d.weights:[];getTheme();await save();await storeExtra();closePanel();toast('Backup restaurado.')}catch(e){appInfo('Falha ao restaurar: '+e.message)}finally{el.value=''}}
 // ---------- novos recursos v7 ----------
 function setVoiceOption(k,v){appSettings.voiceOptions??={};appSettings.voiceOptions[k]=v;storeExtra();showPanel('settings')}
 function setVoiceParam(k,v){appSettings[k]=Number(v);storeExtra();showPanel('settings')}
-function testVoice(){if(!('speechSynthesis' in window))return alert('Voz não disponível neste navegador');speechSynthesis.cancel();const m=new SpeechSynthesisUtterance('Próxima etapa: corrida. Velocidade, nove quilômetros por hora. Duração, três minutos.');m.lang='pt-BR';m.rate=appSettings.voiceRate||1.1;m.volume=appSettings.voiceVolume??1;speechSynthesis.speak(m)}
+function testVoice(){if(!('speechSynthesis' in window))return appInfo('Voz não disponível neste navegador');speechSynthesis.cancel();const m=new SpeechSynthesisUtterance('Próxima etapa: corrida. Velocidade, nove quilômetros por hora. Duração, três minutos.');m.lang='pt-BR';m.rate=appSettings.voiceRate||1.1;m.volume=appSettings.voiceVolume??1;speechSynthesis.speak(m)}
 function setRpe(i){if(history[i])openFeedback(history[i].id,'rpe',true)}
 // Fluxo de conclusão: modal de esforço -> modal de distância -> opção de foto.
 let feedbackId=null,feedbackStage='rpe',feedbackSelectedRpe=null,feedbackHistoryOnly=false;
@@ -757,10 +805,11 @@ function renderFeedback(){
  document.getElementById('feedbackTitle').textContent='Distância real da esteira';
  const hasKm=e.actualKm!==null&&e.actualKm!==undefined&&Number.isFinite(Number(e.actualKm));
  const dist=hasKm?Math.max(0,Math.round(Number(e.actualKm)*1000)):Math.max(0,Math.round((Number(e.plannedKm)||0)*1000));
- const km=Math.min(200,Math.floor(dist/1000)),meters=dist%1000;
+ const roundedDist=Math.min(200000,Math.round(dist/100)*100);
+ const km=Math.floor(roundedDist/1000),meters=roundedDist%1000;
  body.innerHTML=`<p class="feedback-sub">Informe a distância indicada no painel da esteira. Escolha os quilômetros e os metros separadamente.</p>
  <div class="feedback-distance"><label>Quilômetros (km)<select id="feedbackKm" onchange="updateFeedbackDistance()">${Array.from({length:201},(_,n)=>`<option value="${n}" ${n===km?'selected':''}>${n} km</option>`).join('')}</select></label>
- <label>Metros (m)<select id="feedbackM" onchange="updateFeedbackDistance()">${Array.from({length:1000},(_,n)=>`<option value="${n}" ${n===meters?'selected':''}>${n} m</option>`).join('')}</select></label></div>
+ <label>Metros (m)<select id="feedbackM" onchange="updateFeedbackDistance()">${Array.from({length:10},(_,i)=>i*100).map(n=>`<option value="${n}" ${n===meters?'selected':''}>${n} m</option>`).join('')}</select></label></div>
  <div class="feedback-total" id="feedbackTotal"></div>
  <div class="feedback-buttons"><button class="btn" onclick="saveFeedbackDistance(false)">Pular</button><button class="btn ok" onclick="saveFeedbackDistance(true)">Salvar distância</button></div>`;
  updateFeedbackDistance();
@@ -768,29 +817,37 @@ function renderFeedback(){
 }
 function selectEffort(n){feedbackSelectedRpe=n;document.querySelectorAll('#feedbackModal .feedback-face').forEach((b,i)=>{b.classList.toggle('chosen',i+1===n);b.setAttribute('aria-pressed',String(i+1===n))});document.getElementById('effortCaption').textContent=`${n}/10 · ${effortLabels[n-1]}`;document.getElementById('effortContinue').disabled=false}
 function nextFeedback(saveEffort){const e=history.find(x=>x.id===feedbackId);if(!e)return skipWorkoutFeedback();if(saveEffort&&feedbackSelectedRpe!==null){e.rpe=feedbackSelectedRpe;storeExtra().catch(console.error)}if(feedbackHistoryOnly){closeFeedback();showPanel('stats');return}feedbackStage='distance';renderFeedback()}
-function updateFeedbackDistance(){const km=Number(document.getElementById('feedbackKm')?.value||0),m=Number(document.getElementById('feedbackM')?.value||0);document.getElementById('feedbackTotal').textContent=`Total: ${(km+m/1000).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3})} km`}
+function updateFeedbackDistance(){const km=Number(document.getElementById('feedbackKm')?.value||0),m=Number(document.getElementById('feedbackM')?.value||0);document.getElementById('feedbackTotal').textContent=`Total: ${(km+m/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})} km`}
 function saveFeedbackDistance(saveDistance){const e=history.find(x=>x.id===feedbackId);if(e&&saveDistance){e.actualKm=Number(document.getElementById('feedbackKm').value)+Number(document.getElementById('feedbackM').value)/1000;storeExtra().catch(console.error)}finishFeedback()}
 function closeFeedback(){document.getElementById('feedbackModal').classList.remove('active');feedbackId=null;feedbackHistoryOnly=false}
-function finishFeedback(){const id=feedbackId,only=feedbackHistoryOnly;closeFeedback();if(only){showPanel('stats');return}setTimeout(()=>{if(confirm('Deseja tirar uma foto ou selfie com os detalhes do treino para postar?'))openWorkoutPhoto(id)},80)}
+async function finishFeedback(){const id=feedbackId,only=feedbackHistoryOnly;closeFeedback();if(only){showPanel('stats');return}setTimeout(async ()=>{if(await appConfirm('Deseja tirar uma foto ou selfie com os detalhes do treino para postar?','Foto pós-treino'))openWorkoutPhoto(id)},80)}
 function skipWorkoutFeedback(){if(feedbackStage==='rpe'&&!feedbackHistoryOnly){nextFeedback(false)}else finishFeedback()}
 
 function exportSinglePlan(i){const x=i===-1?{name:activePlanName,plan,done}:savedPlans[i];if(!x)return;const safe=x.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').slice(0,50)||'plano';downloadJson({plan:x.plan,done:x.done||{}},'corrida-'+safe+'.json')}
-async function importSinglePlan(el){const f=el.files?.[0];if(!f)return;try{const d=JSON.parse(await f.text());validPack(d);if(savedPlans.length>=100)throw Error('Limite de 100 planos salvos.');const name=prompt('Nome para este plano importado:',f.name.replace(/\.json$/i,''));if(!name?.trim())return;savedPlans.push({id:uid(),name:name.trim(),plan:d.plan,done:d.done&&typeof d.done==='object'&&!Array.isArray(d.done)?d.done:{}});await storeExtra();showPanel('plans');toast('Plano adicionado à biblioteca.')}catch(e){alert('Erro na importação: '+e.message)}finally{el.value=''}}
-function addWeight(){const date=prompt('Data da medição (AAAA-MM-DD):',new Date().toLocaleDateString('en-CA'));if(date===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return alert('Data inválida');const raw=prompt('Peso (kg):','');if(raw===null)return;const kg=Number(raw.replace(',','.'));if(!Number.isFinite(kg)||kg<20||kg>400)return alert('Peso inválido');weights=weights.filter(x=>x.date!==date);weights.push({date,kg});weights.sort((a,b)=>a.date.localeCompare(b.date));storeExtra();showPanel('stats')}
-function deleteWeight(i){if(!confirm('Excluir esta medição?'))return;weights.splice(i,1);storeExtra();showPanel('stats')}
+async function importSinglePlan(el){const f=el.files?.[0];if(!f)return;try{const d=JSON.parse(await f.text());validPack(d);if(savedPlans.length>=100)throw Error('Limite de 100 planos salvos.');const name=(await appAsk('Importar plano',[{id:'name',label:'Nome para o plano',value:f.name.replace(/\.json$/i,''),maxLength:80}],v=>!v.name.trim()?'Informe o nome do plano':null))?.name;if(!name?.trim())return;savedPlans.push({id:uid(),name:name.trim(),plan:d.plan,done:d.done&&typeof d.done==='object'&&!Array.isArray(d.done)?d.done:{}});await storeExtra();showPanel('plans');toast('Plano adicionado à biblioteca.')}catch(e){appInfo('Erro na importação: '+e.message)}finally{el.value=''}}
+async function addWeight(){
+ const v=await appAsk('Registrar peso corporal',[{id:'date',label:'Data da medição',type:'date',value:new Date().toLocaleDateString('en-CA')},{id:'kg',label:'Peso (kg)',type:'number',value:'',min:20,max:400,step:0.1,placeholder:'Ex.: 73,5'}],v=>{
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(v.date)||Number.isNaN(Date.parse(v.date)))return 'Data inválida';
+ const kg=Number(String(v.kg).replace(',','.'));return !Number.isFinite(kg)||kg<20||kg>400?'Informe um peso entre 20 e 400 kg':null;
+ });
+ if(!v)return;const kg=Number(String(v.kg).replace(',','.'));
+ weights=weights.filter(x=>x.date!==v.date);weights.push({date:v.date,kg});weights.sort((a,b)=>a.date.localeCompare(b.date));storeExtra();showPanel('stats');
+}
+async function deleteWeight(i){if(!await appConfirm('Excluir esta medição?'))return;weights.splice(i,1);storeExtra();showPanel('stats')}
 function plotSvg(points,label,unit){const width=340,height=158,left=42,right=12,top=14,bottom=29;const vals=points.map(x=>x.value).filter(Number.isFinite);if(!vals.length)return '<p class="summary-line">Sem dados ainda.</p>';let lo=Math.min(...vals),hi=Math.max(...vals);if(lo===hi){lo-=1;hi+=1}else{const pad=(hi-lo)*.15;lo-=pad;hi+=pad}const xs=i=>left+(width-left-right)*(points.length===1?.5:i/(points.length-1));const ys=v=>top+(height-top-bottom)*(hi-v)/(hi-lo);const coords=points.map((p,i)=>[xs(i),ys(p.value)]);const line=coords.map(p=>p.join(',')).join(' ');let svg=`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(label)}">`;for(let j=0;j<3;j++){const y=top+j*(height-top-bottom)/2,val=hi-j*(hi-lo)/2;svg+=`<line x1="${left}" y1="${y}" x2="${width-right}" y2="${y}" stroke="var(--line)"/><text x="${left-5}" y="${y+4}" text-anchor="end">${rnd(val,1)}</text>`}svg+=`<polyline points="${line}" fill="none" stroke="var(--acc)" stroke-width="2.5"/>`;coords.forEach(([x,y])=>svg+=`<circle cx="${x}" cy="${y}" r="3" fill="var(--acc)"/>`);const step=Math.max(1,Math.ceil(points.length/5));points.forEach((p,i)=>{if(i%step===0||i===points.length-1)svg+=`<text x="${xs(i)}" y="${height-8}" text-anchor="middle">${esc(p.label)}</text>`});return svg+'</svg><p class="summary-line">'+esc(label)+' ('+esc(unit)+')</p>'}
 function renderEvolutionCharts(){const sorted=[...history].sort((a,b)=>String(a.at).localeCompare(String(b.at)));const distance=sorted.map(x=>({label:new Date(x.at).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}),value:Number(x.actualKm??x.plannedKm)||0}));const pace=sorted.map(x=>{const km=Number(x.actualKm??x.plannedKm)||0;return{label:new Date(x.at).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}),value:km>0?(Number(x.actualSeconds)||0)/60/km:NaN}}).filter(x=>Number.isFinite(x.value)&&x.value>0&&x.value<30);const days=new Map();sorted.forEach(x=>{const d=String(x.at).slice(0,10);days.set(d,(days.get(d)||0)+1)});const freq=[...days].map(([date,value])=>({label:date.slice(8)+'/'+date.slice(5,7),value}));return `<div class="chartbox"><h3>Distância por treino</h3>${plotSvg(distance,'Distância registrada ou prevista','km')}</div><div class="chartbox"><h3>Pace médio estimado</h3>${plotSvg(pace,'Ritmo médio','min/km')}</div><div class="chartbox"><h3>Frequência de treinos por dia</h3>${plotSvg(freq,'Treinos concluídos','quantidade')}</div><div class="chartbox"><h3>Histórico de peso (opcional)</h3><button class="btn ok" onclick="addWeight()">+ Registrar peso</button>${plotSvg(weights.map(x=>({label:x.date.slice(8)+'/'+x.date.slice(5,7),value:x.kg})),'Peso corporal','kg')}${weights.map((x,i)=>`<div class="summary-line">${esc(x.date)}: ${rnd(x.kg,1)} kg <button class="btn danger" onclick="deleteWeight(${i})">Excluir</button></div>`).join('')}</div><p class="summary-line">Gráficos exibem dados registrados no dispositivo. Distâncias e paces calculados a partir do plano são estimativas, salvo quando você informa a distância real.</p>`}
 
 function getHistoryById(id){return history.find(x=>x.id===id)||null}
 function getWorkoutPhotoData(id){const e=getHistoryById(id);if(!e)return null;const dist=Number(e.actualKm??e.plannedKm)||0;const pace=paceFromEntry(e);return {entry:e,date:new Date(e.at),dist,pace,title:e.title,planName:e.planName||activePlanName,week:e.week,duration:fmtT(e.actualSeconds||e.plannedSeconds||0),rpe:e.rpe}}
-async function openWorkoutPhoto(id){if(!navigator.mediaDevices?.getUserMedia)return alert('Câmera não disponível neste navegador.');photoEntryId=id;photoBlob=null;document.getElementById('photoCanvas').style.display='none';const v=document.getElementById('camVideo');v.style.display='block';document.getElementById('photoLiveActions').style.display='flex';document.getElementById('photoPreviewActions').style.display='none';document.getElementById('photoModal').classList.add('active');await startPhotoCamera()}
-function closePhotoModal(){stopPhotoStream();document.getElementById('photoModal').classList.remove('active');photoEntryId=null;photoBlob=null}
+async function openWorkoutPhoto(id){photoEntryId=id;photoBlob=null;photoSource='camera';document.getElementById('photoPicker').value='';document.getElementById('photoCanvas').style.display='none';const v=document.getElementById('camVideo');v.style.display='block';document.getElementById('photoLiveActions').style.display='flex';document.getElementById('photoPreviewActions').style.display='none';document.getElementById('photoModal').classList.add('active');if(navigator.mediaDevices?.getUserMedia) await startPhotoCamera(); else {v.style.display='none';document.getElementById('photoModeChip').textContent='Escolha uma foto da galeria';appInfo('Câmera não disponível neste navegador. Você ainda pode escolher uma foto da galeria.')}}
+function closePhotoModal(){stopPhotoStream();document.getElementById('photoModal').classList.remove('active');document.getElementById('photoPicker').value='';photoEntryId=null;photoBlob=null;photoSource='camera'}
 function stopPhotoStream(){if(photoStream){photoStream.getTracks().forEach(t=>t.stop());photoStream=null}}
-async function startPhotoCamera(){stopPhotoStream();try{const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:photoFacing},width:{ideal:1440},height:{ideal:1920}},audio:false});photoStream=s;const v=document.getElementById('camVideo');v.srcObject=s;v.classList.toggle('mirror',photoFacing==='user');document.getElementById('photoModeChip').textContent=photoFacing==='user'?'Modo selfie':'Modo câmera traseira';await v.play()}catch(e){alert('Não foi possível acessar a câmera. Verifique a permissão do navegador.');closePhotoModal()}}
-async function switchCamera(){photoFacing=photoFacing==='user'?'environment':'user';await startPhotoCamera()}
+async function startPhotoCamera(){stopPhotoStream();try{const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:photoFacing},width:{ideal:1440},height:{ideal:1920}},audio:false});photoStream=s;const v=document.getElementById('camVideo');v.srcObject=s;v.classList.toggle('mirror',photoFacing==='user');document.getElementById('photoModeChip').textContent=photoFacing==='user'?'Modo selfie':'Modo câmera traseira';await v.play()}catch(e){const v=document.getElementById('camVideo');v.style.display='none';document.getElementById('photoModeChip').textContent='Escolha uma foto da galeria';appInfo('Não foi possível acessar a câmera. Você ainda pode escolher uma imagem da galeria.')}}
+async function switchCamera(){if(!navigator.mediaDevices?.getUserMedia)return appInfo('A câmera não está disponível neste navegador.');photoFacing=photoFacing==='user'?'environment':'user';await startPhotoCamera()}
 function drawWorkoutOverlay(ctx,w,h,data){const acc=getComputedStyle(document.documentElement).getPropertyValue('--acc').trim()||'#d35400';const panelH=Math.max(h*.28,240);const y=h-panelH;const grad=ctx.createLinearGradient(0,y,0,h);grad.addColorStop(0,'rgba(0,0,0,0.05)');grad.addColorStop(.18,'rgba(0,0,0,.45)');grad.addColorStop(1,'rgba(0,0,0,.82)');ctx.fillStyle=grad;ctx.fillRect(0,y,w,panelH);ctx.save();rr(ctx,24,24,190,44,22);ctx.fillStyle=acc;ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 24px sans-serif';ctx.textBaseline='middle';ctx.fillText('TREINO CONCLUÍDO',42,46);ctx.restore();ctx.fillStyle='#fff';ctx.textBaseline='top';ctx.font='bold 42px sans-serif';const lines=wrapLines(ctx,(data.title||'Treino').toUpperCase(),w-60,2);let ty=y+28;for(const line of lines){ctx.fillText(line,30,ty);ty+=46}ctx.font='24px sans-serif';ctx.fillStyle='rgba(255,255,255,.92)';ctx.fillText(`${data.planName||'Plano'} · Semana ${data.week||'-'}`,30,ty+6);ty+=44;ctx.font='bold 27px sans-serif';ctx.fillStyle=acc;ctx.fillText(`${data.duration}  ·  ${String((data.dist||0).toFixed(2)).replace('.',',')} km`,30,ty);ty+=38;ctx.font='22px sans-serif';ctx.fillStyle='#fff';const dateTxt=data.date?data.date.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';let foot=`${dateTxt}`;if(data.pace)foot+=`  ·  Pace ${data.pace} min/km`;if(data.rpe)foot+=`  ·  RPE ${data.rpe}/10`;ctx.fillText(foot,30,ty)}
-function captureWorkoutPhoto(){const v=document.getElementById('camVideo');if(!v.videoWidth)return;const c=document.getElementById('photoCanvas'),ctx=c.getContext('2d');const w=v.videoWidth,h=v.videoHeight;c.width=w;c.height=h;if(photoFacing==='user'){ctx.save();ctx.scale(-1,1);ctx.drawImage(v,-w,0,w,h);ctx.restore()}else ctx.drawImage(v,0,0,w,h);const data=getWorkoutPhotoData(photoEntryId);if(data)drawWorkoutOverlay(ctx,w,h,data);c.style.display='block';v.style.display='none';document.getElementById('photoLiveActions').style.display='none';document.getElementById('photoPreviewActions').style.display='flex';c.toBlob(b=>photoBlob=b,'image/png',.96);stopPhotoStream()}
-async function retakeWorkoutPhoto(){photoBlob=null;document.getElementById('photoCanvas').style.display='none';const v=document.getElementById('camVideo');v.style.display='block';document.getElementById('photoLiveActions').style.display='flex';document.getElementById('photoPreviewActions').style.display='none';await startPhotoCamera()}
+async function pickWorkoutPhoto(inp){const f=inp.files?.[0];if(!f)return;photoSource='gallery';const img=new Image();img.onload=()=>{const c=document.getElementById('photoCanvas'),ctx=c.getContext('2d');const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;c.width=w;c.height=h;ctx.drawImage(img,0,0,w,h);const data=getWorkoutPhotoData(photoEntryId);if(data)drawWorkoutOverlay(ctx,w,h,data);c.style.display='block';const v=document.getElementById('camVideo');v.style.display='none';document.getElementById('photoModeChip').textContent='Imagem da galeria';document.getElementById('photoLiveActions').style.display='none';document.getElementById('photoPreviewActions').style.display='flex';c.toBlob(b=>photoBlob=b,'image/png',.96);stopPhotoStream();URL.revokeObjectURL(img.src)};img.onerror=()=>appInfo('Não foi possível abrir a imagem selecionada.');img.src=URL.createObjectURL(f)}
+function captureWorkoutPhoto(){const v=document.getElementById('camVideo');if(!v.videoWidth)return;photoSource='camera';const c=document.getElementById('photoCanvas'),ctx=c.getContext('2d');const w=v.videoWidth,h=v.videoHeight;c.width=w;c.height=h;if(photoFacing==='user'){ctx.save();ctx.scale(-1,1);ctx.drawImage(v,-w,0,w,h);ctx.restore()}else ctx.drawImage(v,0,0,w,h);const data=getWorkoutPhotoData(photoEntryId);if(data)drawWorkoutOverlay(ctx,w,h,data);c.style.display='block';v.style.display='none';document.getElementById('photoLiveActions').style.display='none';document.getElementById('photoPreviewActions').style.display='flex';c.toBlob(b=>photoBlob=b,'image/png',.96);stopPhotoStream()}
+async function retakeWorkoutPhoto(){photoBlob=null;photoSource='camera';document.getElementById('photoPicker').value='';document.getElementById('photoCanvas').style.display='none';const v=document.getElementById('camVideo');v.style.display='block';document.getElementById('photoLiveActions').style.display='flex';document.getElementById('photoPreviewActions').style.display='none';if(navigator.mediaDevices?.getUserMedia) await startPhotoCamera(); else {v.style.display='none';document.getElementById('photoModeChip').textContent='Escolha uma foto da galeria'}}
 function downloadWorkoutPhoto(){const c=document.getElementById('photoCanvas');const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download='corrida-post-treino.png';a.click()}
 async function shareWorkoutPhoto(){const c=document.getElementById('photoCanvas');const blob=photoBlob||await new Promise(res=>c.toBlob(res,'image/png',.96));if(!blob)return;const file=new File([blob],'corrida-post-treino.png',{type:'image/png'});const data=getWorkoutPhotoData(photoEntryId)||{};const text=`${data.title||'Treino concluído'} · ${data.duration||''} · ${String((data.dist||0).toFixed(2)).replace('.',',')} km`;try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Treino concluído',text});}else{downloadWorkoutPhoto();toast('Imagem pronta. O navegador baixou a foto.')} }catch(e){}}
 
