@@ -234,6 +234,11 @@ html[data-theme="oceano"]{--acc:#0284c7;--ok:#0d9488;--run:#0284c7}html[data-the
 .photo-actions,.photo-secondary{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.photo-actions .btn,.photo-secondary .btn{flex:1}
 .photo-chip{display:inline-block;background:var(--bg);color:var(--mut);padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;margin-top:8px}
 
+/* Resumo opcional dos intervalos dentro de cada card */
+.interval-details{grid-column:1/-1;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--tx);font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.interval-details[hidden]{display:none}
+.interval-toggle{border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--acc);font-size:13px;font-weight:700;padding:8px 12px;min-height:36px;cursor:pointer;margin-top:8px}
+.interval-toggle:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 </style>
 </head>
 <body>
@@ -366,13 +371,22 @@ function render(){
     const d=document.createElement('div');d.className='card'+(ok?' completed':'');
     const run=wo.steps.filter(x=>x.type==='run').reduce((t,x)=>t+x.dur,0);
     d.innerHTML=`<label class="ck"><input type="checkbox" ${ok?'checked':''} onchange="toggleDone(${i},this.checked)"><span></span></label>
-      <div class="det" onclick="openEditor(${i})"><h3>${esc(wo.title)}</h3><p class="summary-line">${esc(intervalSummary(wo))}</p><div class="pills"><span class="tag">⏱ ${fmtT(totalSec(wo))}</span><span class="tag">🏃 ${fmtT(run)}</span><span class="tag">≈ ${rnd(workoutKm(wo),2)} km</span><span class="tag">${wo.steps.length} etapas</span></div></div>
+      <div class="det"><h3 onclick="openEditor(${i})">${esc(wo.title)}</h3><div class="pills"><span class="tag">⏱ ${fmtT(totalSec(wo))}</span><span class="tag">🏃 ${fmtT(run)}</span><span class="tag">≈ ${rnd(workoutKm(wo),2)} km</span><span class="tag">${wo.steps.length} etapas</span></div><button type="button" class="interval-toggle" aria-expanded="false" aria-controls="interval-detail-${i}" onclick="toggleIntervalDetails(${i},this)">▾ Ver intervalos</button></div>
       <button class="play" onclick="startWorkout(${i})" aria-label="Iniciar">▶</button>
+      <div class="interval-details" id="interval-detail-${i}" hidden>${esc(intervalSummary(wo))}</div>
       <div class="tl">${wo.steps.map(x=>`<i class="t-${x.type}" style="flex:${x.dur}"></i>`).join('')}</div>`;
     list.appendChild(d);
   });
   document.getElementById('prog').textContent=`${c}/${w.workouts.length} concluídos`;renderResume();
   if(view){const bn=document.createElement('div');bn.className='vbar';bn.innerHTML=`<span>👁 Semana ${plan.cur+1}${weekDone(w)?' · concluída':''}</span><button class="btn" onclick="exitView()">Voltar ao plano</button>`;list.prepend(bn)}
+}
+function toggleIntervalDetails(i,button){
+ const details=document.getElementById('interval-detail-'+i);
+ if(!details)return;
+ const open=details.hidden;
+ details.hidden=!open;
+ button.setAttribute('aria-expanded',String(open));
+ button.textContent=open?'▴ Ocultar intervalos':'▾ Ver intervalos';
 }
 function exitView(){view=false;render()}
 function openDone(){
