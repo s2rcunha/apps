@@ -240,6 +240,23 @@ html[data-theme="oceano"]{--acc:#0284c7;--ok:#0d9488;--run:#0284c7}html[data-the
 .interval-item{display:block;padding:7px 0;line-height:1.45}.interval-item+.interval-item{border-top:1px solid var(--line)}
 .interval-toggle{border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--acc);font-size:13px;font-weight:700;padding:8px 12px;min-height:36px;cursor:pointer;margin-top:8px}
 .interval-toggle:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+
+/* Modal pós-treino v13 */
+#feedbackModal{background:rgba(9,13,22,.7);align-items:center;justify-content:center;padding:16px;z-index:10020}
+.feedback-sheet{background:var(--sf);color:var(--tx);border-radius:22px;width:min(100%,520px);padding:20px;max-height:calc(100dvh - 32px);overflow:auto;box-shadow:0 14px 48px rgba(0,0,0,.3)}
+.feedback-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.feedback-header h2{font-size:20px;margin:0}.feedback-sub{font-size:14px;line-height:1.5;color:var(--mut);margin:4px 0 16px}
+.feedback-emoji-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.feedback-face{min-height:80px;background:var(--bg);border:2px solid var(--line);border-radius:14px;display:flex;align-items:center;flex-direction:column;justify-content:center;gap:5px;color:var(--tx);cursor:pointer}
+.feedback-face span{font-size:29px;line-height:1.2}.feedback-face small{font-size:12px;font-weight:800}
+.feedback-face.chosen{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 12%,var(--sf))}
+.feedback-caption{min-height:24px;margin:14px 0 4px;text-align:center;color:var(--mut);font-size:14px}
+.feedback-distance{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.feedback-distance label{display:block;font-size:14px;color:var(--mut);font-weight:700}
+.feedback-distance select{width:100%;height:56px;font-size:21px;font-weight:800;margin-top:6px;background:var(--bg);color:var(--tx)}
+.feedback-total{text-align:center;font-size:23px;font-weight:800;color:var(--acc);margin-bottom:12px}
+.feedback-buttons{display:flex;gap:10px;margin-top:16px}.feedback-buttons .btn{flex:1;min-height:49px}
+@media(max-width:350px){.feedback-emoji-grid{gap:4px}.feedback-face{min-height:72px}.feedback-face span{font-size:24px}}
 </style>
 </head>
 <body>
@@ -291,6 +308,15 @@ html[data-theme="oceano"]{--acc:#0284c7;--ok:#0d9488;--run:#0284c7}html[data-the
   </div>
 </div>
 
+
+
+<!-- Registro de esforço e distância real -->
+<div class="modal" id="feedbackModal" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+  <div class="feedback-sheet">
+    <div class="feedback-header"><h2 id="feedbackTitle">Como foi o treino?</h2><button class="icon" onclick="skipWorkoutFeedback()" aria-label="Fechar registro">✕</button></div>
+    <div id="feedbackBody"></div>
+  </div>
+</div>
 
 <div id="photoModal" class="modal">
   <div class="photo-sheet">
@@ -692,7 +718,7 @@ function showPanel(which){let html=`<div class="eh1"><button class="icon" onclic
  html+=`<div class="card"><b>Backup completo</b><p>Inclui plano ativo, outros planos, progresso, histórico e tema. Use para trocar de dispositivo.</p><button class="btn ok" onclick="exportBackup()">⬇️ Exportar backup completo</button><button class="btn" onclick="document.getElementById('backupInput').click()">⬆️ Restaurar backup</button><input id="backupInput" type="file" accept=".json,application/json" hidden onchange="restoreBackup(this)"></div><div class="card"><b>Importar plano separado</b><p>Use o menu principal para importar planos JSON antigos. O plano atual será preservado em Meus planos.</p></div>`;
  }
  document.getElementById('panelContent').innerHTML=html;document.getElementById('extraPanel').classList.add('active');}
-function editHistory(i){const x=history[i],v=prompt('Distância REAL indicada na esteira (km):',x.actualKm??'');if(v===null)return;const n=Number(v.replace(',','.'));if(!Number.isFinite(n)||n<0||n>200)return alert('Distância inválida');x.actualKm=n;storeExtra();showPanel('stats')}
+function editHistory(i){if(history[i])openFeedback(history[i].id,'distance',true)}
 function setTheme(t){appSettings.theme=t;getTheme();storeExtra();showPanel('settings')}
 function saveCurrentAsPlan(){const name=prompt('Nome da cópia do plano:',activePlanName);if(!name?.trim())return;savedPlans.push({id:uid(),name:name.trim(),plan:clone(plan),done:clone(done)});storeExtra();showPanel('plans')}
 function renameCurrentPlan(){const name=prompt('Nome do plano atual:',activePlanName);if(!name?.trim())return;activePlanName=name.trim();storeExtra();showPanel('plans')}
@@ -706,8 +732,48 @@ async function restoreBackup(el){const f=el.files[0];if(!f)return;try{const d=JS
 function setVoiceOption(k,v){appSettings.voiceOptions??={};appSettings.voiceOptions[k]=v;storeExtra();showPanel('settings')}
 function setVoiceParam(k,v){appSettings[k]=Number(v);storeExtra();showPanel('settings')}
 function testVoice(){if(!('speechSynthesis' in window))return alert('Voz não disponível neste navegador');speechSynthesis.cancel();const m=new SpeechSynthesisUtterance('Próxima etapa: corrida. Velocidade, nove quilômetros por hora. Duração, três minutos.');m.lang='pt-BR';m.rate=appSettings.voiceRate||1.1;m.volume=appSettings.voiceVolume??1;speechSynthesis.speak(m)}
-function setRpe(i){const x=history[i],v=prompt('Esforço percebido de 1 a 10 (1 muito leve, 10 máximo):',x.rpe??'5');if(v===null)return;const n=Number(v);if(!Number.isInteger(n)||n<1||n>10)return alert('Digite um número inteiro entre 1 e 10');x.rpe=n;storeExtra();showPanel('stats')}
-function collectWorkoutFeedback(id){const i=history.findIndex(x=>x.id===id);if(i<0)return;const r=prompt('Como foi o esforço do treino? Informe 1 a 10 (Cancelar para pular):','5');if(r!==null){const n=Number(r);if(Number.isInteger(n)&&n>=1&&n<=10)history[i].rpe=n}const d=prompt('Distância real indicada na esteira, em km (opcional):','');if(d!==null&&d.trim()){const n=Number(d.replace(',','.'));if(Number.isFinite(n)&&n>=0&&n<=200)history[i].actualKm=n}storeExtra();setTimeout(()=>{if(confirm('Deseja tirar uma foto ou selfie com os detalhes do treino para postar?'))openWorkoutPhoto(id)},80)}
+function setRpe(i){if(history[i])openFeedback(history[i].id,'rpe',true)}
+// Fluxo de conclusão: modal de esforço -> modal de distância -> opção de foto.
+let feedbackId=null,feedbackStage='rpe',feedbackSelectedRpe=null,feedbackHistoryOnly=false;
+const effortFaces=['😄','🙂','🙂','😐','😐','😓','😣','😫','🥵','🥵'];
+const effortLabels=['Muito fácil','Muito leve','Leve','Confortável','Moderado','Cansativo','Difícil','Muito difícil','Extenuante','Máximo'];
+function collectWorkoutFeedback(id){openFeedback(id,'rpe',false)}
+function openFeedback(id,stage='rpe',historyOnly=true){
+ if(!history.some(x=>x.id===id))return;
+ feedbackId=id;feedbackStage=stage;feedbackHistoryOnly=historyOnly;
+ feedbackSelectedRpe=history.find(x=>x.id===id)?.rpe??null;
+ document.getElementById('feedbackModal').classList.add('active');renderFeedback();
+}
+function renderFeedback(){
+ const e=history.find(x=>x.id===feedbackId);if(!e)return skipWorkoutFeedback();
+ const body=document.getElementById('feedbackBody');
+ if(feedbackStage==='rpe'){
+ document.getElementById('feedbackTitle').textContent='Como foi o esforço?';
+ body.innerHTML=`<p class="feedback-sub">Escolha a carinha que mais representa a intensidade sentida no treino (escala de 1 a 10).</p>
+ <div class="feedback-emoji-grid">${effortFaces.map((emoji,i)=>`<button type="button" class="feedback-face ${feedbackSelectedRpe===i+1?'chosen':''}" aria-label="Esforço ${i+1}: ${effortLabels[i]}" aria-pressed="${feedbackSelectedRpe===i+1}" onclick="selectEffort(${i+1})"><span>${emoji}</span><small>${i+1}</small></button>`).join('')}</div>
+ <div class="feedback-caption" id="effortCaption">${feedbackSelectedRpe?`${feedbackSelectedRpe}/10 · ${effortLabels[feedbackSelectedRpe-1]}`:'Toque em uma carinha para selecionar'}</div>
+ <div class="feedback-buttons"><button class="btn" onclick="nextFeedback(false)">Pular</button><button class="btn ok" onclick="nextFeedback(true)" ${feedbackSelectedRpe===null?'disabled':''} id="effortContinue">Continuar</button></div>`;
+ }else{
+ document.getElementById('feedbackTitle').textContent='Distância real da esteira';
+ const hasKm=e.actualKm!==null&&e.actualKm!==undefined&&Number.isFinite(Number(e.actualKm));
+ const dist=hasKm?Math.max(0,Math.round(Number(e.actualKm)*1000)):Math.max(0,Math.round((Number(e.plannedKm)||0)*1000));
+ const km=Math.min(200,Math.floor(dist/1000)),meters=dist%1000;
+ body.innerHTML=`<p class="feedback-sub">Informe a distância indicada no painel da esteira. Escolha os quilômetros e os metros separadamente.</p>
+ <div class="feedback-distance"><label>Quilômetros (km)<select id="feedbackKm" onchange="updateFeedbackDistance()">${Array.from({length:201},(_,n)=>`<option value="${n}" ${n===km?'selected':''}>${n} km</option>`).join('')}</select></label>
+ <label>Metros (m)<select id="feedbackM" onchange="updateFeedbackDistance()">${Array.from({length:1000},(_,n)=>`<option value="${n}" ${n===meters?'selected':''}>${n} m</option>`).join('')}</select></label></div>
+ <div class="feedback-total" id="feedbackTotal"></div>
+ <div class="feedback-buttons"><button class="btn" onclick="saveFeedbackDistance(false)">Pular</button><button class="btn ok" onclick="saveFeedbackDistance(true)">Salvar distância</button></div>`;
+ updateFeedbackDistance();
+ }
+}
+function selectEffort(n){feedbackSelectedRpe=n;document.querySelectorAll('#feedbackModal .feedback-face').forEach((b,i)=>{b.classList.toggle('chosen',i+1===n);b.setAttribute('aria-pressed',String(i+1===n))});document.getElementById('effortCaption').textContent=`${n}/10 · ${effortLabels[n-1]}`;document.getElementById('effortContinue').disabled=false}
+function nextFeedback(saveEffort){const e=history.find(x=>x.id===feedbackId);if(!e)return skipWorkoutFeedback();if(saveEffort&&feedbackSelectedRpe!==null){e.rpe=feedbackSelectedRpe;storeExtra().catch(console.error)}if(feedbackHistoryOnly){closeFeedback();showPanel('stats');return}feedbackStage='distance';renderFeedback()}
+function updateFeedbackDistance(){const km=Number(document.getElementById('feedbackKm')?.value||0),m=Number(document.getElementById('feedbackM')?.value||0);document.getElementById('feedbackTotal').textContent=`Total: ${(km+m/1000).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3})} km`}
+function saveFeedbackDistance(saveDistance){const e=history.find(x=>x.id===feedbackId);if(e&&saveDistance){e.actualKm=Number(document.getElementById('feedbackKm').value)+Number(document.getElementById('feedbackM').value)/1000;storeExtra().catch(console.error)}finishFeedback()}
+function closeFeedback(){document.getElementById('feedbackModal').classList.remove('active');feedbackId=null;feedbackHistoryOnly=false}
+function finishFeedback(){const id=feedbackId,only=feedbackHistoryOnly;closeFeedback();if(only){showPanel('stats');return}setTimeout(()=>{if(confirm('Deseja tirar uma foto ou selfie com os detalhes do treino para postar?'))openWorkoutPhoto(id)},80)}
+function skipWorkoutFeedback(){if(feedbackStage==='rpe'&&!feedbackHistoryOnly){nextFeedback(false)}else finishFeedback()}
+
 function exportSinglePlan(i){const x=i===-1?{name:activePlanName,plan,done}:savedPlans[i];if(!x)return;const safe=x.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').slice(0,50)||'plano';downloadJson({plan:x.plan,done:x.done||{}},'corrida-'+safe+'.json')}
 async function importSinglePlan(el){const f=el.files?.[0];if(!f)return;try{const d=JSON.parse(await f.text());validPack(d);if(savedPlans.length>=100)throw Error('Limite de 100 planos salvos.');const name=prompt('Nome para este plano importado:',f.name.replace(/\.json$/i,''));if(!name?.trim())return;savedPlans.push({id:uid(),name:name.trim(),plan:d.plan,done:d.done&&typeof d.done==='object'&&!Array.isArray(d.done)?d.done:{}});await storeExtra();showPanel('plans');toast('Plano adicionado à biblioteca.')}catch(e){alert('Erro na importação: '+e.message)}finally{el.value=''}}
 function addWeight(){const date=prompt('Data da medição (AAAA-MM-DD):',new Date().toLocaleDateString('en-CA'));if(date===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return alert('Data inválida');const raw=prompt('Peso (kg):','');if(raw===null)return;const kg=Number(raw.replace(',','.'));if(!Number.isFinite(kg)||kg<20||kg>400)return alert('Peso inválido');weights=weights.filter(x=>x.date!==date);weights.push({date,kg});weights.sort((a,b)=>a.date.localeCompare(b.date));storeExtra();showPanel('stats')}
