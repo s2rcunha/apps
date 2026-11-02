@@ -207,6 +207,21 @@ input,select{background:var(--bg);color:var(--tx);border:1px solid var(--line);b
 #toast{position:fixed;left:50%;bottom:calc(100px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:#1f2937;color:#fff;padding:12px 16px;border-radius:14px;font-size:14px;width:max-content;max-width:min(92vw,420px);opacity:0;pointer-events:none;transition:.25s;z-index:9990;display:flex;gap:12px;align-items:center}
 #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 #toast button{background:none;border:0;color:#fbbf24;font-weight:800;font-size:14px;min-height:36px}
+/* Novas cores e áreas */
+:root{--acc:#d35400;--ok:#27ae60;--red:#c0392b}
+html[data-theme="oceano"]{--acc:#0284c7;--ok:#0d9488}html[data-theme="violeta"]{--acc:#7c3aed;--ok:#8b5cf6}html[data-theme="verde"]{--acc:#16a34a;--ok:#059669}html[data-theme="rosa"]{--acc:#db2777;--ok:#be185d}html[data-theme="grafite"]{--acc:#64748b;--ok:#0d9488}
+.theme-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.theme-colors button{border:2px solid var(--line);border-radius:12px;background:var(--sf);color:var(--tx);min-height:52px;font-weight:700}.theme-colors button.sel{border-color:var(--acc)}
+.panel{max-width:560px;margin:0 auto;padding:14px 14px 130px}.panel .card{display:block}.panel h2{margin:6px 0 14px}.summary-line{font-size:13px;color:var(--mut);line-height:1.5;margin:7px 0}.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin:12px 0}.stat{padding:13px;background:var(--sf);border-radius:14px}.stat strong{display:block;font-size:23px;color:var(--acc)}.stat small{color:var(--mut)}
+.panel input,.panel select{max-width:100%}.panel .mi{border-radius:12px;padding:5px 10px;margin:7px 0;background:var(--sf)}.panel .btn{margin:5px}.panel .formline{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:10px 0}.panel label{font-size:13px;color:var(--mut)}
+#pMetrics{font-size:14px;font-weight:700;color:#cbd5e1}#resumeBox{background:var(--sf);border-radius:14px;margin-bottom:12px;padding:12px;display:none}
+@media(max-width:420px){.theme-colors{grid-template-columns:repeat(2,1fr)}}
+
+/* painel de evolução e controles da esteira */
+.chartbox{background:var(--sf);padding:12px;border-radius:14px;margin:12px 0;border:1px solid var(--line)}
+.chartbox svg{display:block;width:100%;height:auto}.chartbox h3{margin:0 0 8px;font-size:15px}.chartbox text{fill:var(--mut);font-size:11px}
+.speedchange{display:flex;gap:9px;justify-content:center;align-items:center;color:#fff;margin:8px 0}
+.speedchange button{border:1px solid #64748b;background:#334155;color:#fff;border-radius:9px;font-size:20px;min-width:54px;min-height:43px}
+.speedchange strong{font-size:14px}.panel .card{display:block}.panel .card .btn{margin:4px 3px 4px 0}
 </style>
 </head>
 <body>
@@ -215,7 +230,7 @@ input,select{background:var(--bg);color:var(--tx);border:1px solid var(--line);b
   <div id="weeks" class="chips"></div>
 </div></header>
 <div class="container">
-  <div id="list"></div>
+  <div id="resumeBox"></div><div id="list"></div>
 </div>
 
 <button class="fab" onclick="openEditor(null)" aria-label="Novo treino">＋</button>
@@ -223,6 +238,10 @@ input,select{background:var(--bg);color:var(--tx);border:1px solid var(--line);b
 <div id="doneM" class="modal" onclick="if(event.target===this)closeDone()"><div class="bsheet"><div class="grab"></div><h3>Semanas concluídas</h3><div id="doneList"></div></div></div>
 <div id="menu" class="modal" onclick="if(event.target===this)closeMenu()"><div class="bsheet"><div class="grab"></div>
   <button class="mi" id="mInst" style="display:none" onclick="mdo(instalar)">📲 Instalar app</button>
+  <button class="mi" onclick="mdo(()=>showPanel('stats'))">📊 Histórico e estatísticas</button>
+  <button class="mi" onclick="mdo(()=>showPanel('plans'))">🗂️ Meus planos</button>
+  <button class="mi" onclick="mdo(()=>showPanel('settings'))">🎨 Temas e ajustes</button>
+  <button class="mi" onclick="mdo(()=>showPanel('backup'))">🛡️ Backup e restauração</button>
   <button class="mi" id="mDone" onclick="mdo(openDone)">✅ Semanas concluídas</button>
   <button class="mi" onclick="mdo(setWeeks)">🗓️ Definir nº de semanas</button>
   <button class="mi" onclick="mdo(dupWeek)">⧉ Duplicar semana</button>
@@ -232,6 +251,7 @@ input,select{background:var(--bg);color:var(--tx);border:1px solid var(--line);b
   <button class="mi d" onclick="mdo(clearAll)">⚠️ Limpar tudo</button>
   <input type="file" id="imp" accept=".json" hidden onchange="importPlan(this)">
 </div></div>
+<div id="extraPanel" class="modal" style="background:var(--bg);overflow:auto;align-items:flex-start"><div id="panelContent" class="panel" style="width:100%"></div></div>
 <!-- EDITOR -->
 <div id="editor" class="modal"><div class="sheet" id="sheet"></div></div>
 
@@ -240,11 +260,12 @@ input,select{background:var(--bg);color:var(--tx);border:1px solid var(--line);b
   <div class="ph"><span id="pTitle" style="font-weight:bold;font-size:14px;color:#94a3b8"></span><button class="btn-close" onclick="closePlayer()">✕ Sair</button></div>
   <div><div id="pBadge" class="badge bg-walk"></div><div id="pStep" style="font-size:13px;color:#94a3b8;margin-top:4px"></div></div>
   <div class="ringwrap"><svg class="ring" viewBox="0 0 200 200"><circle class="r0" cx="100" cy="100" r="90"/><circle id="pRing" class="r1" cx="100" cy="100" r="90"/></svg><div class="rc"><div id="pTimer" class="timer">00:00</div><div id="pSpeed" class="speed">-</div></div></div>
-  <div class="next"><div class="nl">PRÓXIMA ETAPA</div><div id="pNext" style="font-weight:bold">-</div></div>
+  <div class="speedchange"><button onclick="changeLiveSpeed(-.1)" aria-label="Diminuir velocidade">−</button><strong>Velocidade da etapa</strong><button onclick="changeLiveSpeed(.1)" aria-label="Aumentar velocidade">+</button></div>
+  <div id="pMetrics"></div><div class="next"><div class="nl">PRÓXIMA ETAPA</div><div id="pNext" style="font-weight:bold">-</div></div>
   <div>
     <div class="bar"><div id="pFill"></div></div>
     <div class="pc">
-      <button class="circ" onclick="prevStep()">⏮</button>
+      <button class="circ" onclick="prevStep()" aria-label="Etapa anterior">⏮</button><button class="circ" onclick="repeatStep()" aria-label="Repetir etapa" title="Repetir etapa">↻</button>
       <button id="pPlay" class="circ play" onclick="togglePlay()">▶</button>
       <button class="circ" onclick="nextStep()">⏭</button>
     </div>
@@ -261,7 +282,15 @@ async function dbSet(k,v){const d=await idb();return new Promise((res,rej)=>{con
 const uid=()=>Math.random().toString(36).slice(2,9);
 const newWeek=()=>({id:uid(),workouts:[]});
 let plan={cur:0,weeks:[newWeek()]}, done={};
-const save=()=>Promise.all([dbSet('plan',plan),dbSet('done',done)]).catch(()=>alert('Erro ao salvar no IndexedDB.'));
+const save=()=>dbSet('bundle',{plan,done}).catch(()=>alert('Erro ao salvar no IndexedDB.'));
+let weights=[];let history=[],activePlanName='Meu plano',savedPlans=[],appSettings={theme:'laranja',voice:true};
+const storeExtra=()=>Promise.all([dbSet('history',history),dbSet('plans',savedPlans),dbSet('activeName',activePlanName),dbSet('settings',appSettings),dbSet('weights',weights)]);
+const clone=x=>JSON.parse(JSON.stringify(x));
+const rnd=(n,d=1)=>Number.isFinite(n)?n.toFixed(d).replace('.',','):'0';
+const kmOf=s=>Math.max(0,(Number(s.kmh)||0)*(Number(s.dur)||0)/3600);
+const workoutKm=w=>(w.steps||[]).reduce((t,x)=>t+kmOf(x),0);
+const getTheme=()=>document.documentElement.dataset.theme=appSettings.theme;
+
 
 // ---------- helpers ----------
 const DEF={walk:'Caminhada',run:'Corrida',cool:'Desaquecimento'};
@@ -273,7 +302,7 @@ const fmtSpeed=s=>{if(!s.kmh)return DEF[s.type]||'-';return s.mode==='pace'?`${f
 const parseVal=(mode,v)=>{v=String(v||'').trim();if(!v||!mode)return 0;
   if(mode==='kmh'){const k=parseFloat(v.replace(',','.'));return k>0?k:0}
   const m=v.match(/^(\d+)(?::(\d{1,2}))?$/);if(!m)return 0;const t=+m[1]*60+(+(m[2]||0));return t>0?3600/t:0};
-const totalSec=w=>w.steps.reduce((a,s)=>a+s.dur,0);
+const totalSec=w=>(w.steps||[]).reduce((a,s)=>a+(Number(s.dur)||0),0);
 const wkKey=(w,wo)=>`${w.id}_${wo.id}`;
 
 // ---------- tela principal ----------
@@ -289,7 +318,7 @@ function render(){
   wc.style.display=view||all?'none':'';
   wc.innerHTML=vis.map(i=>`<button class="chip ${i===plan.cur?'on':''}" onclick="selWeek(${i})">Sem ${i+1}</button>`).join('');
   const on=wc.querySelector('.on');if(on)wc.scrollLeft=on.offsetLeft-wc.clientWidth/2+on.clientWidth/2;
-  if(all){document.getElementById('prog').textContent='🏆';list.innerHTML='<div class="empty"><div style="font-size:42px">🏆</div>Todas as semanas concluídas!<br>Revise em <b>⋯ › Semanas concluídas</b> ou adicione semanas em <b>Definir nº de semanas</b>.</div>';return}
+  if(all){renderResume();document.getElementById('prog').textContent='🏆';list.innerHTML='<div class="empty"><div style="font-size:42px">🏆</div>Todas as semanas concluídas!<br>Revise em <b>⋯ › Semanas concluídas</b> ou adicione semanas em <b>Definir nº de semanas</b>.</div>';return}
   const w=plan.weeks[plan.cur];
   let c=0;
   list.innerHTML=w.workouts.length?'':'<div class="empty"><div style="font-size:42px">🏃</div>Nenhum treino nesta semana.<br>Toque em <b>＋</b> para criar um treino.</div>';
@@ -298,12 +327,12 @@ function render(){
     const d=document.createElement('div');d.className='card'+(ok?' completed':'');
     const run=wo.steps.filter(x=>x.type==='run').reduce((t,x)=>t+x.dur,0);
     d.innerHTML=`<label class="ck"><input type="checkbox" ${ok?'checked':''} onchange="toggleDone(${i},this.checked)"><span></span></label>
-      <div class="det" onclick="openEditor(${i})"><h3>${esc(wo.title)}</h3>${wo.notes?`<p>${esc(wo.notes)}</p>`:''}<div class="pills"><span class="tag">⏱ ${fmtT(totalSec(wo))}</span><span class="tag">🏃 ${fmtT(run)}</span><span class="tag">${wo.steps.length} etapas</span></div></div>
+      <div class="det" onclick="openEditor(${i})"><h3>${esc(wo.title)}</h3><p class="summary-line">${esc(intervalSummary(wo))}</p><div class="pills"><span class="tag">⏱ ${fmtT(totalSec(wo))}</span><span class="tag">🏃 ${fmtT(run)}</span><span class="tag">≈ ${rnd(workoutKm(wo),2)} km</span><span class="tag">${wo.steps.length} etapas</span></div></div>
       <button class="play" onclick="startWorkout(${i})" aria-label="Iniciar">▶</button>
       <div class="tl">${wo.steps.map(x=>`<i class="t-${x.type}" style="flex:${x.dur}"></i>`).join('')}</div>`;
     list.appendChild(d);
   });
-  document.getElementById('prog').textContent=`${c}/${w.workouts.length} concluídos`;
+  document.getElementById('prog').textContent=`${c}/${w.workouts.length} concluídos`;renderResume();
   if(view){const bn=document.createElement('div');bn.className='vbar';bn.innerHTML=`<span>👁 Semana ${plan.cur+1}${weekDone(w)?' · concluída':''}</span><button class="btn" onclick="exitView()">Voltar ao plano</button>`;list.prepend(bn)}
 }
 function exitView(){view=false;render()}
@@ -316,7 +345,7 @@ const closeDone=()=>document.getElementById('doneM').classList.remove('active');
 function viewWeek(i){closeDone();view=true;plan.cur=i;render();window.scrollTo(0,0)}
 let tt=null;
 function toast(msg,undo){
-  const t=document.getElementById('toast');t.innerHTML=`<span>${msg}</span>${undo?'<button id="tu">Desfazer</button>':''}`;
+  const t=document.getElementById('toast');t.innerHTML=`<span>${esc(msg)}</span>${undo?'<button id="tu">Desfazer</button>':''}`;
   if(undo)document.getElementById('tu').onclick=()=>{undo();t.classList.remove('on')};
   t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),6000);
 }
@@ -352,14 +381,21 @@ function clearAll(){
 function exportPlan(){
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([JSON.stringify({plan,done})],{type:'application/json'}));
-  a.download='plano-corrida.json';a.click();
+  a.download='plano-corrida.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function validPack(d){
+ if(!d||!d.plan||!Array.isArray(d.plan.weeks)||!d.plan.weeks.length||d.plan.weeks.length>104)throw Error('Semanas inválidas');
+ let ids=new Set();
+ for(const w of d.plan.weeks){if(!w||typeof w.id!=='string'||ids.has(w.id)||!Array.isArray(w.workouts)||w.workouts.length>200)throw Error('Semana inválida');ids.add(w.id);
+ for(const wo of w.workouts){if(!wo||typeof wo.id!=='string'||!Array.isArray(wo.steps)||!wo.steps.length||wo.steps.length>3000)throw Error('Treino inválido');
+ for(const x of wo.steps){if(!['run','walk','cool'].includes(x.type)||!Number.isFinite(x.dur)||x.dur<=0||x.dur>86400||!Number.isFinite(x.kmh)||x.kmh<0||x.kmh>40||typeof x.name!=='string')throw Error('Etapa inválida');}}
+ }return true;
 }
 function importPlan(inp){
-  const f=inp.files[0];if(!f)return;
-  f.text().then(t=>{const d=JSON.parse(t);if(!d.plan||!Array.isArray(d.plan.weeks))throw 0;
-    if(!confirm('Substituir o plano atual pelo arquivo importado?'))return;
-    plan=d.plan;done=d.done||{};plan.cur=0;view=false;save();render()}).catch(()=>alert('Arquivo inválido.'));
-  inp.value='';
+ const f=inp.files[0];if(!f)return;
+ f.text().then(t=>{const d=JSON.parse(t);validPack(d);if(!confirm('Importar este plano? O plano atual será guardado em Meus planos.'))return;
+ savedPlans.push({id:uid(),name:activePlanName,plan:clone(plan),done:clone(done)});
+ plan=d.plan;done=d.done||{};activePlanName=f.name.replace(/\.json$/i,'');plan.cur=0;view=false;storeExtra();save();render();toast('Plano importado. O anterior está em Meus planos.')}).catch(e=>alert('Arquivo inválido: '+e.message));inp.value='';
 }
 
 // ---------- editor de treino ----------
@@ -380,7 +416,7 @@ function openEditor(i){
   if(i===null)d={id:uid(),title:`Treino ${w.workouts.length+1}`,notes:'',unit:'kmh',items:[mk('walk',300,'AQUECIMENTO'),{k:'r',n:5,steps:[mk('run',180),mk('walk',120,'RECUPERAÇÃO')]},mk('cool',300,'DESAQUECIMENTO')]};
   else{
     d=JSON.parse(JSON.stringify(w.workouts[i]));
-    if(!d.items){d.unit=(d.steps.find(x=>x.mode)||{}).mode||'kmh';d.items=d.steps.map(x=>({k:'s',name:x.name,type:x.type,dur:x.dur,kmh:x.kmh||0}))}
+    if(!d.items){d.unit=(d.steps.find(x=>x.mode)||{}).mode||'kmh';d.items=d.steps.map(x=>({k:'s',name:x.name,type:x.type,dur:x.dur,kmh:x.kmh||0,distanceKm:x.distanceKm||0}))}
   }
   ed={idx:i,data:d};renderEditor();document.getElementById('editor').classList.add('active');
 }
@@ -393,8 +429,9 @@ function stepCard(s,i,j){
   <div class="ctl">
     <div class="cg"><label>Duração (min:seg)</label><div class="stp"><button onclick="eDur(${i},${j},-1)">−</button><input id="d${i}_${j}" value="${fmtMS(s.dur)}" onchange="eDurT(${i},${j},this)"><button onclick="eDur(${i},${j},1)">+</button></div><small>toque para digitar</small></div>
     <div class="cg"><label>Ritmo (${u==='kmh'?'km/h':'min/km'})</label><div class="stp"><button onclick="eSp(${i},${j},-1)">−</button><input id="p${i}_${j}" ${u==='kmh'?'inputmode="decimal"':''} placeholder="—" value="${spVal(s,u)}" onchange="eSpT(${i},${j},this)"><button onclick="eSp(${i},${j},1)">+</button></div><small id="q${i}_${j}">${spEq(s,u)}</small></div>
-  </div></div>`;
+   </div><div class="cg" style="grid-column:1/-1"><label>Distância planejada (km) · opcional</label><div class="stp"><input inputmode="decimal" placeholder="Ex.: 0,4" value="${s.distanceKm?rnd(s.distanceKm,3):''}" onchange="eDistance(${i},${j},this)"></div><small>Se informar distância e tempo, a velocidade/pace será calculada automaticamente.</small></div></div>`;
 }
+
 function renderEditor(){
   const d=ed.data,u=d.unit;
   const items=d.items.map((it,i)=>it.k==='s'?stepCard(it,i,-1):`<div class="rep"><div class="rep-h"><b>🔁 Repetir</b><div class="stp sm"><button onclick="eN(${i},-1)">−</button><span id="n${i}">${it.n}×</span><button onclick="eN(${i},1)">+</button></div><span class="ib">${ibtn(i,-1)}</span></div>${it.steps.map((x,j)=>stepCard(x,i,j)).join('')}<button class="btn" style="width:100%" onclick="eAddIn(${i})">+ Etapa no bloco</button></div>`).join('');
@@ -412,20 +449,21 @@ function eSum(){
   const f=flat(ed.data),t=f.reduce((a,x)=>a+x.dur,0),r=f.filter(x=>x.type==='run').reduce((a,x)=>a+x.dur,0),km=f.reduce((a,x)=>a+x.dur/3600*(x.kmh||0),0);
   document.getElementById('sum').innerHTML=`<div class="tl big">${f.map(x=>`<i class="t-${x.type}" style="flex:${x.dur}"></i>`).join('')}</div><div class="sumtxt">⏱ ${fmtT(t)} · 🏃 ${fmtT(r)} correndo${km?` · ≈ ${km.toFixed(1).replace('.',',')} km`:''} · ${f.length} etapas</div>`;
 }
-function eDur(i,j,dir){const s=eS(i,j);s.dur=Math.max(5,s.dur+dir*15);eId('d',i,j).value=fmtMS(s.dur);eSum()}
+function eDur(i,j,dir){const s=eS(i,j);s.dur=Math.max(5,s.dur+dir*15);if(s.distanceKm)s.kmh=s.distanceKm*3600/s.dur;renderEditor()}
 function eDurT(i,j,el){
   const v=el.value.trim().replace(',','.'),m=v.match(/^(\d+):(\d{1,2})$/),t=m?+m[1]*60+ +m[2]:Math.round(parseFloat(v)*60),s=eS(i,j);
-  if(t>0)s.dur=t;el.value=fmtMS(s.dur);eSum();
+  if(t>0)s.dur=t;if(s.distanceKm)s.kmh=s.distanceKm*3600/s.dur;el.value=fmtMS(s.dur);renderEditor();
 }
 function eSp(i,j,dir){
   const s=eS(i,j),u=ed.data.unit;
   if(!s.kmh)s.kmh=DK[s.type];
   else if(u==='kmh')s.kmh=Math.max(1,Math.round((s.kmh+dir*.1)*10)/10);
   else s.kmh=3600/Math.max(120,Math.min(1200,Math.round(3600/s.kmh)+dir*5));
-  eSpShow(i,j);
+  s.distanceKm=0;eSpShow(i,j);
 }
-function eSpT(i,j,el){eS(i,j).kmh=parseVal(ed.data.unit,el.value);eSpShow(i,j)}
+function eSpT(i,j,el){const s=eS(i,j);s.kmh=parseVal(ed.data.unit,el.value);s.distanceKm=0;eSpShow(i,j)}
 function eSpShow(i,j){const s=eS(i,j),u=ed.data.unit;eId('p',i,j).value=spVal(s,u);eId('q',i,j).textContent=spEq(s,u);eSum()}
+function eDistance(i,j,el){const s=eS(i,j),v=Number(String(el.value).replace(',','.'));if(!Number.isFinite(v)||v<0||v>200)return alert('Distância inválida');if(v&&v*3600/s.dur>40)return alert('Essa distância exigiria mais de 40 km/h. Ajuste o tempo ou a distância.');s.distanceKm=v;if(s.distanceKm&&s.dur>0)s.kmh=s.distanceKm*3600/s.dur;renderEditor()}
 function eN(i,dir){const it=ed.data.items[i];it.n=Math.max(1,Math.min(99,it.n+dir));document.getElementById('n'+i).textContent=it.n+'×';eSum()}
 function eUnit(u){ed.data.unit=u;renderEditor()}
 function eType(i,j,t){const s=eS(i,j);if(s.name===NM[s.type])s.name=NM[t];if(s.kmh===DK[s.type])s.kmh=DK[t];s.type=t;renderEditor()}
@@ -439,23 +477,24 @@ function eAddRep(){ed.data.items.push({k:'r',n:5,steps:[mk('run',180),mk('walk',
 function saveWorkout(){
   const d=ed.data,f=flat(d).filter(x=>x.dur>0);
   if(!f.length)return alert('Adicione ao menos uma etapa.');
+  if(f.some(x=>!Number.isFinite(x.kmh)||x.kmh<0||x.kmh>40))return alert('Há uma velocidade inválida. Verifique as distâncias e durações.');
   d.title=d.title.trim()||'Treino';
-  d.steps=f.map(x=>({name:x.name,type:x.type,dur:x.dur,kmh:x.kmh||0,mode:x.kmh?d.unit:''}));
+  d.steps=f.map(x=>({name:x.name,type:x.type,dur:x.dur,kmh:x.kmh||0,mode:x.kmh?d.unit:'',...(x.distanceKm?{distanceKm:x.distanceKm}:{})}));
   const w=plan.weeks[plan.cur];
   ed.idx===null?w.workouts.push(d):w.workouts[ed.idx]=d;
   closeEditor();save();render();
 }
 
 // ---------- player ----------
-let cw=null,cIdx=0,cStep=0,tRem=0,timer=null,playing=false,audioCtx=null,wakeLock=null,cWeek=null;
+let liveSpeeds={};let cw=null,cIdx=0,cStep=0,tRem=0,timer=null,playing=false,audioCtx=null,wakeLock=null,cWeek=null,startedAt=null,elapsedActive=0,activeStartAt=0;
 function startWorkout(i){
-  cWeek=plan.weeks[plan.cur];cw=cWeek.workouts[i];
+  cWeek=plan.weeks[plan.cur];cw=clone(cWeek.workouts[i]);liveSpeeds={};
   if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();
   requestWakeLock();
-  cStep=0;tRem=cw.steps[0].dur;playing=false;
+  cStep=0;tRem=cw.steps[0].dur;playing=false;startedAt=new Date().toISOString();elapsedActive=0;activeStartAt=0;dbSet('session',null);
   document.getElementById('pTitle').textContent=`SEMANA ${plan.cur+1} - ${cw.title.toUpperCase()}`;
   document.getElementById('playerModal').classList.add('active');
-  updateUI();togglePlay();
+  document.getElementById('audioToggle').checked=appSettings.voice!==false;updateUI();togglePlay();
 }
 const spHtml=x=>{const[a,b]=fmtSpeed(x).split(' (');return b?`${a}<small>(${b}</small>`:a};
 function updateUI(){
@@ -467,39 +506,50 @@ function updateUI(){
   const al=!!nx&&tRem>0&&tRem<=5,nb=document.querySelector('.next');
   document.getElementById('pNext').innerHTML=nx?`<div class="nn">${esc(nx.name)} · ${fmtT(nx.dur)}</div><div class="ns">${spHtml(nx)}</div>`:'Fim do treino! 🎉';
   nb.classList.toggle('alert',al);nb.dataset.n=nx?nx.type:'';document.getElementById('playerModal').classList.toggle('al',al);
+  document.getElementById('pMetrics').textContent=`Restante: ${fmtT(Math.max(0,cw.steps.slice(cStep+1).reduce((a,x)=>a+x.dur,0)+tRem))} · Previsto: ${rnd(workoutKm(cw),2)} km`;
   const pc=(s.dur-tRem)/s.dur,el=cw.steps.slice(0,cStep).reduce((t,x)=>t+x.dur,0)+(s.dur-tRem);document.getElementById('pRing').style.strokeDashoffset=565.5*(1-pc);document.getElementById('pFill').style.width=(el/totalSec(cw)*100)+'%';document.getElementById('playerModal').dataset.t=s.type;
   document.getElementById('pPlay').textContent=playing?'❚❚':'▶';
 }
 let endAt=0;
 const remNow=()=>Math.max(0,Math.ceil((endAt-Date.now())/1000));
-function resetStep(){tRem=cw.steps[cStep].dur;endAt=Date.now()+tRem*1000;updateUI()}
+function resetStep(){tRem=cw.steps[cStep].dur;endAt=playing?Date.now()+tRem*1000:0;updateUI();persistSession()}
 function togglePlay(){
-  if(playing){clearInterval(timer);playing=false}
-  else{playing=true;if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();endAt=Date.now()+tRem*1000;timer=setInterval(loop,250)}
-  updateUI();
+ if(playing){loop();if(!cw)return;elapsedActive+=Math.max(0,Date.now()-activeStartAt);activeStartAt=0;clearInterval(timer);playing=false;endAt=0}
+ else{playing=true;activeStartAt=Date.now();if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();endAt=Date.now()+tRem*1000;clearInterval(timer);timer=setInterval(loop,250)}
+ updateUI();persistSession();
 }
-function loop(){let g=0;while(playing&&tRem>remNow()&&g++<5000)tickOnce();if(playing)updateUI()}
+function persistSession(){if(!cw||!cWeek)return;dbSet('session',{weekId:cWeek.id,workoutId:cw.id,cStep,tRem,playing,endAt,startedAt,elapsedActive,updatedAt:Date.now(),liveSpeeds,workoutSnapshot:cw}).catch(()=>{})}
+
+function loop(){if(!playing)return;let g=0;while(playing&&tRem>remNow()&&g++<5000)tickOnce();if(playing){updateUI();if(Date.now()%4000<300)persistSession()}}
 function tickOnce(){
   tRem--;
   if(tRem<=0){
     beep(880,.4);vib([200,80,200]);
-    if(cStep<cw.steps.length-1){cStep++;const s=cw.steps[cStep];tRem=s.dur;endAt+=s.dur*1000;speak(`Início de ${s.name}. ${spoken(s)}`)}
+    if(cStep<cw.steps.length-1){cStep++;const s=cw.steps[cStep];tRem=s.dur;endAt+=s.dur*1000;announceStage(s)}
     else finishWorkout();
-  }else if(tRem===5){beep(440,.15);speak('Atenção! Próxima etapa em 5 segundos.')}
+  }else if(tRem===5){beep(440,.15);if(voiceEnabled('countdown'))speak('Atenção! Próxima etapa em 5 segundos.')}
   else if(tRem<=3){beep(440,.1);vib(60)}
 }
 const spoken=s=>!s.kmh?'':(s.mode==='pace'?`Pace ${fmtPace(s.kmh).replace(':',' e ')} por quilômetro.`:`${fmtKmh(s.kmh)} quilômetros por hora.`);
+function voiceEnabled(key){return appSettings.voice!==false&&appSettings.voiceOptions?.[key]!==false}
+function announceStage(step){if(!voiceEnabled('stage'))return;let msg='Início de '+step.name+'. ';if(voiceEnabled('speed'))msg+=spoken(step);if(voiceEnabled('duration'))msg+=' Duração '+fmtT(step.dur)+'.';speak(msg)}
+function changeLiveSpeed(delta){if(!cw)return;const s=cw.steps[cStep];const k=Math.max(0,Math.min(40,Math.round(((Number(s.kmh)||0)+delta)*10)/10));s.kmh=k;s.distanceKm=0;liveSpeeds[cStep]=k;updateUI();persistSession();if(voiceEnabled('speed'))speak('Velocidade ajustada para '+fmtKmh(k)+' quilômetros por hora.');}
+
 function prevStep(){if(cStep>0){cStep--;resetStep()}}
-function nextStep(){if(cStep<cw.steps.length-1){cStep++;resetStep()}else finishWorkout()}
+function repeatStep(){resetStep()}
+function nextStep(){if(cStep<cw.steps.length-1){cStep++;resetStep()}else if(confirm('Concluir e registrar este treino?'))finishWorkout()}
 function finishWorkout(){
-  clearInterval(timer);playing=false;
-  speak('Parabéns! Treino concluído com sucesso!');alert('🎉 Parabéns! Você concluiu este treino!');
-  const fw=cWeek,fk=wkKey(cWeek,cw);done[fk]=true;save();closePlayer();render();if(!view)afterDone(fw,fk);
+  if(playing&&activeStartAt)elapsedActive+=Math.max(0,Date.now()-activeStartAt);activeStartAt=0;clearInterval(timer);playing=false;
+  if(voiceEnabled('finish'))speak('Parabéns! Treino concluído com sucesso!');
+  const fw=cWeek,fk=wkKey(cWeek,cw);done[fk]=true;history.unshift({id:uid(),title:cw.title,planName:activePlanName,week:plan.weeks.indexOf(cWeek)+1,at:new Date().toISOString(),plannedSeconds:totalSec(cw),plannedKm:workoutKm(cw),actualSeconds:Math.round(elapsedActive/1000),actualKm:null,rpe:null});storeExtra();save();closePlayer(true);render();toast('🎉 Treino concluído!');setTimeout(()=>collectWorkoutFeedback(history[0].id),120);if(!view)afterDone(fw,fk);
 }
-function closePlayer(){
-  clearInterval(timer);playing=false;
+function closePlayer(finished=false){
+  if(!finished&&cw&&!confirm('Sair do treino? Seu progresso será salvo para continuar depois.'))return;
+  if(!finished&&cw&&playing){loop();if(!cw)return;elapsedActive+=Math.max(0,Date.now()-activeStartAt);activeStartAt=0;clearInterval(timer);playing=false;endAt=0}
+  if(!finished&&cw)persistSession();if(finished)dbSet('session',null);
+   clearInterval(timer);playing=false;
   document.getElementById('playerModal').classList.remove('active');
-  if(wakeLock){wakeLock.release();wakeLock=null}
+  if(wakeLock){wakeLock.release();wakeLock=null}cw=null;cWeek=null;
 }
 function beep(f,d){
   if(!document.getElementById('audioToggle').checked||!audioCtx)return;
@@ -508,7 +558,7 @@ function beep(f,d){
 }
 function speak(t){
   if(!document.getElementById('audioToggle').checked||!('speechSynthesis' in window))return;
-  speechSynthesis.cancel();const m=new SpeechSynthesisUtterance(t);m.lang='pt-BR';m.rate=1.1;speechSynthesis.speak(m);
+  speechSynthesis.cancel();const m=new SpeechSynthesisUtterance(t);m.lang='pt-BR';m.rate=Number(appSettings.voiceRate)||1.1;m.volume=Math.max(0,Math.min(1,Number(appSettings.voiceVolume??1)));speechSynthesis.speak(m);
 }
 async function requestWakeLock(){try{if('wakeLock' in navigator){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null})}}catch(e){}}
 
@@ -533,12 +583,70 @@ addEventListener('appinstalled',()=>{mi().style.display='none'});
 async function instalar(){if(!dp)return;dp.prompt();await dp.userChoice;dp=null;mi().style.display='none'}
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 
+// ---------- melhorias: cards, planos, estatísticas, temas e backup ----------
+function intervalSummary(wo){
+ const s=wo.steps||[];if(!s.length)return 'Nenhuma etapa';
+ const parts=[];let i=0;
+ while(i<s.length){const x=s[i];let n=1;while(i+n<s.length&&s[i+n].type===x.type&&s[i+n].dur===x.dur&&Math.abs((s[i+n].kmh||0)-(x.kmh||0))<.02)n++;
+ const label=x.type==='run'?'corrida':x.type==='walk'?'caminhada':'desaquecimento';
+ parts.push((n>1?n+'× ':'')+fmtT(x.dur)+' '+label+(x.kmh?' · '+fmtKmh(x.kmh)+' km/h':''));i+=n;
+ }return parts.length>8?parts.slice(0,8).join(' → ')+' → +'+(parts.length-8)+' etapas':parts.join(' → ');
+}
+function renderResume(){const el=document.getElementById('resumeBox');dbGet('session').then(session=>{if(!el)return;
+ if(!session||!session.workoutId){el.style.display='none';return}
+ const w=plan.weeks.find(w=>w.id===session.weekId),wo=w&&w.workouts.find(x=>x.id===session.workoutId);
+ if(!wo){el.style.display='none';return}el.style.display='block';el.innerHTML=`<b>⏸ Treino interrompido</b><p>${esc(wo.title)} · etapa ${session.cStep+1} · ${fmtT(session.tRem)} restantes</p><button class="btn ok" onclick="resumeWorkout()">Continuar treino</button><button class="btn danger" onclick="discardSession()">Descartar</button>`;
+ }).catch(()=>{})}
+async function discardSession(){await dbSet('session',null);renderResume()}
+async function resumeWorkout(){const ss=await dbGet('session');if(!ss)return;const w=plan.weeks.find(w=>w.id===ss.weekId),wo=w?.workouts.find(x=>x.id===ss.workoutId);if(!wo)return discardSession();cWeek=w;cw=ss.workoutSnapshot&&Array.isArray(ss.workoutSnapshot.steps)?ss.workoutSnapshot:clone(wo);liveSpeeds=ss.liveSpeeds||{};cStep=Math.max(0,Math.min(ss.cStep,wo.steps.length-1));tRem=Math.max(1,ss.tRem);playing=false;startedAt=ss.startedAt||new Date().toISOString();elapsedActive=ss.elapsedActive||0;activeStartAt=0;
+ if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();requestWakeLock();document.getElementById('pTitle').textContent='RETOMAR · '+wo.title.toUpperCase();document.getElementById('playerModal').classList.add('active');updateUI();}
+function closePanel(){document.getElementById('extraPanel').classList.remove('active');render()}
+function showPanel(which){let html=`<div class="eh1"><button class="icon" onclick="closePanel()">←</button><h2 style="flex:1;margin:0">${({stats:'Histórico e estatísticas',plans:'Meus planos',settings:'Temas, voz e ajustes',backup:'Backup e restauração'})[which]}</h2></div>`;
+ if(which==='stats'){
+ const dist=history.reduce((a,x)=>a+(x.actualKm??x.plannedKm??0),0),secs=history.reduce((a,x)=>a+(x.actualSeconds||0),0);
+ html+=`<div class="stat-grid"><div class="stat"><strong>${history.length}</strong><small>Treinos registrados</small></div><div class="stat"><strong>${rnd(dist,1)} km</strong><small>Distância planejada*</small></div><div class="stat"><strong>${rnd(secs/3600,1)} h</strong><small>Tempo registrado</small></div><div class="stat"><strong>${history.length?rnd(dist/history.length,2):0} km</strong><small>Média planejada por treino</small></div></div><p class="summary-line">* A distância é calculada pelas velocidades programadas; não equivale à distância efetivamente percorrida. É possível informá-la ao editar um registro.</p>`;
+ html+=renderEvolutionCharts();html+='<h3>Histórico de treinos</h3>';html+=history.length?history.map((x,i)=>`<div class="card"><b>${esc(x.title)}</b><div class="summary-line">${new Date(x.at).toLocaleString('pt-BR')} · ${fmtT(x.actualSeconds||0)} · ${rnd(x.plannedKm||0,2)} km previstos${x.actualKm!=null?' · '+rnd(x.actualKm,2)+' km reais':''}</div><button class="btn" onclick="editHistory(${i})">Distância real</button><button class="btn" onclick="setRpe(${i})">Esforço ${x.rpe??'—'}/10</button></div>`).join(''):'<p class="empty">Nenhum treino concluído ainda.</p>';
+ }
+ if(which==='plans'){
+ html+=`<div class="card"><b>Plano atual: ${esc(activePlanName)}</b><p>${plan.weeks.length} semanas</p><button class="btn pri" onclick="saveCurrentAsPlan()">Salvar cópia do plano</button><button class="btn" onclick="exportSinglePlan(-1)">⬇ Exportar este plano</button><button class="btn" onclick="renameCurrentPlan()">Renomear</button></div>`;
+ html+=savedPlans.map((x,i)=>`<div class="card"><b>${esc(x.name)}</b><p>${x.plan.weeks.length} semanas</p><button class="btn ok" onclick="activatePlan(${i})">Abrir plano</button><button class="btn" onclick="exportSinglePlan(${i})">⬇ Exportar</button><button class="btn danger" onclick="deleteSavedPlan(${i})">Excluir cópia</button></div>`).join('')||'<p class="empty">Nenhum outro plano salvo.</p>';html+='<div class="card"><b>Importar um único plano</b><p>Adiciona à biblioteca sem substituir o atual. Aceita JSON tradicional do aplicativo.</p><button class="btn ok" onclick="document.getElementById(\'singlePlanFile\').click()">⬆ Importar plano</button><input type="file" id="singlePlanFile" accept=".json,application/json" hidden onchange="importSinglePlan(this)"></div>';
+ }
+ if(which==='settings'){
+ html+='<p>Escolha a cor principal do aplicativo:</p><div class="theme-colors">'+[['laranja','🟠 Laranja'],['oceano','🔵 Oceano'],['violeta','🟣 Violeta'],['verde','🟢 Verde'],['rosa','🌸 Rosa'],['grafite','⚫ Grafite']].map(([id,name])=>`<button class="${appSettings.theme===id?'sel':''}" onclick="setTheme('${id}')">${name}</button>`).join('')+'</div><p class="summary-line">Os temas respeitam o modo claro ou escuro do dispositivo.</p>';
+ html+='<h3>Avisos por voz</h3><div class="card">'+[['stage','Anunciar início da etapa'],['speed','Informar velocidade ou pace'],['duration','Informar duração da etapa'],['countdown','Avisar 5 segundos antes da mudança'],['finish','Anunciar conclusão']].map(([key,label])=>`<label style="display:block;padding:9px"><input type="checkbox" ${voiceEnabled(key)?'checked':''} onchange="setVoiceOption('${key}',this.checked)"> ${label}</label>`).join('')+`<div class="formline"><label>Velocidade da fala<select onchange="setVoiceParam('voiceRate',this.value)">${[.8,1,1.1,1.25,1.5].map(v=>`<option value="${v}" ${Number(appSettings.voiceRate||1.1)===v?'selected':''}>${v}×</option>`).join('')}</select></label><label>Volume<select onchange="setVoiceParam('voiceVolume',this.value)">${[.25,.5,.75,1].map(v=>`<option value="${v}" ${Number(appSettings.voiceVolume??1)===v?'selected':''}>${Math.round(v*100)}%</option>`).join('')}</select></label></div><button class="btn" onclick="testVoice()">🔊 Testar voz</button></div>`;
+ }
+ if(which==='backup'){
+ html+=`<div class="card"><b>Backup completo</b><p>Inclui plano ativo, outros planos, progresso, histórico e tema. Use para trocar de dispositivo.</p><button class="btn ok" onclick="exportBackup()">⬇️ Exportar backup completo</button><button class="btn" onclick="document.getElementById('backupInput').click()">⬆️ Restaurar backup</button><input id="backupInput" type="file" accept=".json,application/json" hidden onchange="restoreBackup(this)"></div><div class="card"><b>Importar plano separado</b><p>Use o menu principal para importar planos JSON antigos. O plano atual será preservado em Meus planos.</p></div>`;
+ }
+ document.getElementById('panelContent').innerHTML=html;document.getElementById('extraPanel').classList.add('active');}
+function editHistory(i){const x=history[i],v=prompt('Distância REAL indicada na esteira (km):',x.actualKm??'');if(v===null)return;const n=Number(v.replace(',','.'));if(!Number.isFinite(n)||n<0||n>200)return alert('Distância inválida');x.actualKm=n;storeExtra();showPanel('stats')}
+function setTheme(t){appSettings.theme=t;getTheme();storeExtra();showPanel('settings')}
+function saveCurrentAsPlan(){const name=prompt('Nome da cópia do plano:',activePlanName);if(!name?.trim())return;savedPlans.push({id:uid(),name:name.trim(),plan:clone(plan),done:clone(done)});storeExtra();showPanel('plans')}
+function renameCurrentPlan(){const name=prompt('Nome do plano atual:',activePlanName);if(!name?.trim())return;activePlanName=name.trim();storeExtra();showPanel('plans')}
+function activatePlan(i){if(!confirm('Trocar para este plano? O atual ficará salvo automaticamente.'))return;const x=savedPlans.splice(i,1)[0];savedPlans.push({id:uid(),name:activePlanName,plan:clone(plan),done:clone(done)});plan=clone(x.plan);done=clone(x.done);activePlanName=x.name;plan.cur=0;view=false;save();storeExtra();closePanel()}
+function deleteSavedPlan(i){if(!confirm('Excluir esta cópia do plano?'))return;savedPlans.splice(i,1);storeExtra();showPanel('plans')}
+function downloadJson(data,name){const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function exportBackup(){downloadJson({backupVersion:1,createdAt:new Date().toISOString(),plan,done,history,savedPlans,activePlanName,appSettings,weights},'corrida-backup-completo.json')}
+async function restoreBackup(el){const f=el.files[0];if(!f)return;try{const d=JSON.parse(await f.text());validPack(d);if(!Array.isArray(d.history)||!Array.isArray(d.savedPlans))throw Error('Backup incompleto');for(const x of d.savedPlans)validPack({plan:x.plan});if(!confirm('Restaurar backup completo? Isso substituirá seus dados atuais. Exporte um backup antes de continuar.'))return;
+ plan=d.plan;done=d.done||{};history=d.history;savedPlans=d.savedPlans;activePlanName=d.activePlanName||'Meu plano';appSettings=d.appSettings||{theme:'laranja'};weights=Array.isArray(d.weights)?d.weights:[];getTheme();await save();await storeExtra();closePanel();toast('Backup restaurado.')}catch(e){alert('Falha ao restaurar: '+e.message)}finally{el.value=''}}
+// ---------- novos recursos v7 ----------
+function setVoiceOption(k,v){appSettings.voiceOptions??={};appSettings.voiceOptions[k]=v;storeExtra();showPanel('settings')}
+function setVoiceParam(k,v){appSettings[k]=Number(v);storeExtra();showPanel('settings')}
+function testVoice(){if(!('speechSynthesis' in window))return alert('Voz não disponível neste navegador');speechSynthesis.cancel();const m=new SpeechSynthesisUtterance('Próxima etapa: corrida. Velocidade, nove quilômetros por hora. Duração, três minutos.');m.lang='pt-BR';m.rate=appSettings.voiceRate||1.1;m.volume=appSettings.voiceVolume??1;speechSynthesis.speak(m)}
+function setRpe(i){const x=history[i],v=prompt('Esforço percebido de 1 a 10 (1 muito leve, 10 máximo):',x.rpe??'5');if(v===null)return;const n=Number(v);if(!Number.isInteger(n)||n<1||n>10)return alert('Digite um número inteiro entre 1 e 10');x.rpe=n;storeExtra();showPanel('stats')}
+function collectWorkoutFeedback(id){const i=history.findIndex(x=>x.id===id);if(i<0)return;const r=prompt('Como foi o esforço do treino? Informe 1 a 10 (Cancelar para pular):','5');if(r!==null){const n=Number(r);if(Number.isInteger(n)&&n>=1&&n<=10)history[i].rpe=n}const d=prompt('Distância real indicada na esteira, em km (opcional):','');if(d!==null&&d.trim()){const n=Number(d.replace(',','.'));if(Number.isFinite(n)&&n>=0&&n<=200)history[i].actualKm=n}storeExtra()}
+function exportSinglePlan(i){const x=i===-1?{name:activePlanName,plan,done}:savedPlans[i];if(!x)return;const safe=x.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').slice(0,50)||'plano';downloadJson({plan:x.plan,done:x.done||{}},'corrida-'+safe+'.json')}
+async function importSinglePlan(el){const f=el.files?.[0];if(!f)return;try{const d=JSON.parse(await f.text());validPack(d);if(savedPlans.length>=100)throw Error('Limite de 100 planos salvos.');const name=prompt('Nome para este plano importado:',f.name.replace(/\.json$/i,''));if(!name?.trim())return;savedPlans.push({id:uid(),name:name.trim(),plan:d.plan,done:d.done&&typeof d.done==='object'&&!Array.isArray(d.done)?d.done:{}});await storeExtra();showPanel('plans');toast('Plano adicionado à biblioteca.')}catch(e){alert('Erro na importação: '+e.message)}finally{el.value=''}}
+function addWeight(){const date=prompt('Data da medição (AAAA-MM-DD):',new Date().toLocaleDateString('en-CA'));if(date===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return alert('Data inválida');const raw=prompt('Peso (kg):','');if(raw===null)return;const kg=Number(raw.replace(',','.'));if(!Number.isFinite(kg)||kg<20||kg>400)return alert('Peso inválido');weights=weights.filter(x=>x.date!==date);weights.push({date,kg});weights.sort((a,b)=>a.date.localeCompare(b.date));storeExtra();showPanel('stats')}
+function deleteWeight(i){if(!confirm('Excluir esta medição?'))return;weights.splice(i,1);storeExtra();showPanel('stats')}
+function plotSvg(points,label,unit){const width=340,height=158,left=42,right=12,top=14,bottom=29;const vals=points.map(x=>x.value).filter(Number.isFinite);if(!vals.length)return '<p class="summary-line">Sem dados ainda.</p>';let lo=Math.min(...vals),hi=Math.max(...vals);if(lo===hi){lo-=1;hi+=1}else{const pad=(hi-lo)*.15;lo-=pad;hi+=pad}const xs=i=>left+(width-left-right)*(points.length===1?.5:i/(points.length-1));const ys=v=>top+(height-top-bottom)*(hi-v)/(hi-lo);const coords=points.map((p,i)=>[xs(i),ys(p.value)]);const line=coords.map(p=>p.join(',')).join(' ');let svg=`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(label)}">`;for(let j=0;j<3;j++){const y=top+j*(height-top-bottom)/2,val=hi-j*(hi-lo)/2;svg+=`<line x1="${left}" y1="${y}" x2="${width-right}" y2="${y}" stroke="var(--line)"/><text x="${left-5}" y="${y+4}" text-anchor="end">${rnd(val,1)}</text>`}svg+=`<polyline points="${line}" fill="none" stroke="var(--acc)" stroke-width="2.5"/>`;coords.forEach(([x,y])=>svg+=`<circle cx="${x}" cy="${y}" r="3" fill="var(--acc)"/>`);const step=Math.max(1,Math.ceil(points.length/5));points.forEach((p,i)=>{if(i%step===0||i===points.length-1)svg+=`<text x="${xs(i)}" y="${height-8}" text-anchor="middle">${esc(p.label)}</text>`});return svg+'</svg><p class="summary-line">'+esc(label)+' ('+esc(unit)+')</p>'}
+function renderEvolutionCharts(){const sorted=[...history].sort((a,b)=>String(a.at).localeCompare(String(b.at)));const distance=sorted.map(x=>({label:new Date(x.at).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}),value:Number(x.actualKm??x.plannedKm)||0}));const pace=sorted.map(x=>{const km=Number(x.actualKm??x.plannedKm)||0;return{label:new Date(x.at).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}),value:km>0?(Number(x.actualSeconds)||0)/60/km:NaN}}).filter(x=>Number.isFinite(x.value)&&x.value>0&&x.value<30);const days=new Map();sorted.forEach(x=>{const d=String(x.at).slice(0,10);days.set(d,(days.get(d)||0)+1)});const freq=[...days].map(([date,value])=>({label:date.slice(8)+'/'+date.slice(5,7),value}));return `<div class="chartbox"><h3>Distância por treino</h3>${plotSvg(distance,'Distância registrada ou prevista','km')}</div><div class="chartbox"><h3>Pace médio estimado</h3>${plotSvg(pace,'Ritmo médio','min/km')}</div><div class="chartbox"><h3>Frequência de treinos por dia</h3>${plotSvg(freq,'Treinos concluídos','quantidade')}</div><div class="chartbox"><h3>Histórico de peso (opcional)</h3><button class="btn ok" onclick="addWeight()">+ Registrar peso</button>${plotSvg(weights.map(x=>({label:x.date.slice(8)+'/'+x.date.slice(5,7),value:x.kg})),'Peso corporal','kg')}${weights.map((x,i)=>`<div class="summary-line">${esc(x.date)}: ${rnd(x.kg,1)} kg <button class="btn danger" onclick="deleteWeight(${i})">Excluir</button></div>`).join('')}</div><p class="summary-line">Gráficos exibem dados registrados no dispositivo. Distâncias e paces calculados a partir do plano são estimativas, salvo quando você informa a distância real.</p>`}
 // ---------- init ----------
 (async()=>{
   try{
-    const p=await dbGet('plan'),d=await dbGet('done');
+    const b=await dbGet('bundle'),p=b?.plan||await dbGet('plan'),d=b?.done||await dbGet('done');
     if(p&&Array.isArray(p.weeks)&&p.weeks.length){plan=p;plan.cur=Math.min(plan.cur||0,plan.weeks.length-1)}
-    if(d)done=d;
+    if(d)done=d;history=await dbGet('history')||[];savedPlans=await dbGet('plans')||[];activePlanName=await dbGet('activeName')||'Meu plano';appSettings=await dbGet('settings')||{theme:'laranja'};weights=await dbGet('weights')||[];getTheme();
   }catch(e){}
   render();
 })();
