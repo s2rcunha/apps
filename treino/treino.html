@@ -269,6 +269,15 @@ html[data-theme="oceano"]{--acc:#0284c7;--ok:#0d9488;--run:#0284c7}html[data-the
 .app-dialog-sheet .dialog-actions .btn{flex:1;min-height:48px}
 .app-dialog-error{color:var(--red);font-size:13px;min-height:15px;margin-top:5px}
 
+/* Editor com alvos por tempo, distância, velocidade ou pace */
+.goal-mode{display:grid;grid-template-columns:1fr;gap:5px;margin:8px 0 10px}
+.goal-mode label{font-size:12px;font-weight:700}
+.goal-mode select{width:100%;min-height:44px;background:var(--sf)}
+.distance-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.distance-fields select{width:100%;min-height:44px;background:var(--sf)}
+.goal-readout{padding:9px;margin-top:10px;background:var(--sf);border-radius:10px;font-weight:650;font-size:13px;line-height:1.5;color:var(--tx)}
+.goal-readout small{display:block;font-size:12px;color:var(--mut);font-weight:400}
+.interval-item{line-height:1.5;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -402,7 +411,7 @@ let photoStream=null,photoFacing='user',photoEntryId=null,photoBlob=null,photoSo
 const storeExtra=()=>Promise.all([dbSet('history',history),dbSet('plans',savedPlans),dbSet('activeName',activePlanName),dbSet('settings',appSettings),dbSet('weights',weights),dbSet('heightCm',heightCm)]);
 const clone=x=>JSON.parse(JSON.stringify(x));
 const rnd=(n,d=1)=>Number.isFinite(n)?n.toFixed(d).replace('.',','):'0';
-const kmOf=s=>Math.max(0,(Number(s.kmh)||0)*(Number(s.dur)||0)/3600);
+const kmOf=s=>Math.max(0,(s.targetMode&&s.targetMode!=='timeSpeed'&&Number(s.distanceKm)>0)?Number(s.distanceKm):(Number(s.kmh)||0)*(Number(s.dur)||0)/3600);
 const workoutKm=w=>(w.steps||[]).reduce((t,x)=>t+kmOf(x),0);
 const getTheme=()=>document.documentElement.dataset.theme=appSettings.theme;
 const rr=(ctx,x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()};
@@ -448,7 +457,7 @@ function render(){
     d.innerHTML=`<label class="ck"><input type="checkbox" ${ok?'checked':''} onchange="toggleDone(${i},this.checked)"><span></span></label>
       <div class="det"><h3 onclick="openEditor(${i})">${esc(wo.title)}</h3><div class="pills"><span class="tag">⏱ ${fmtT(totalSec(wo))}</span><span class="tag">🏃 ${fmtT(run)}</span><span class="tag">≈ ${rnd(workoutKm(wo),2)} km</span><span class="tag">${wo.steps.length} etapas</span></div><button type="button" class="interval-toggle" aria-expanded="false" aria-controls="interval-detail-${i}" onclick="toggleIntervalDetails(${i},this)">▾ Ver intervalos</button></div>
       <button class="play" onclick="startWorkout(${i})" aria-label="Iniciar">▶</button>
-      <div class="interval-details" id="interval-detail-${i}" hidden>${intervalSummary(wo).split(" · ").map(item=>`<div class="interval-item">${esc(item)}</div>`).join("")}</div>
+      <div class="interval-details" id="interval-detail-${i}" hidden>${intervalSummary(wo).split(" | ").map(item=>`<div class="interval-item">${esc(item)}</div>`).join("")}</div>
       <div class="tl">${wo.steps.map(x=>`<i class="t-${x.type}" style="flex:${x.dur}"></i>`).join('')}</div>`;
     list.appendChild(d);
   });
@@ -516,7 +525,7 @@ function validPack(d){
  let ids=new Set();
  for(const w of d.plan.weeks){if(!w||typeof w.id!=='string'||ids.has(w.id)||!Array.isArray(w.workouts)||w.workouts.length>200)throw Error('Semana inválida');ids.add(w.id);
  for(const wo of w.workouts){if(!wo||typeof wo.id!=='string'||!Array.isArray(wo.steps)||!wo.steps.length||wo.steps.length>3000)throw Error('Treino inválido');
- for(const x of wo.steps){if(!['run','walk','cool'].includes(x.type)||!Number.isFinite(x.dur)||x.dur<=0||x.dur>86400||!Number.isFinite(x.kmh)||x.kmh<0||x.kmh>40||typeof x.name!=='string')throw Error('Etapa inválida');}}
+ for(const x of wo.steps){if(!['run','walk','cool'].includes(x.type)||!Number.isFinite(x.dur)||x.dur<=0||x.dur>86400||!Number.isFinite(x.kmh)||x.kmh<0||x.kmh>40||typeof x.name!=='string'||(x.distanceKm!==undefined&&(!Number.isFinite(x.distanceKm)||x.distanceKm<0||x.distanceKm>200))||(x.targetMode!==undefined&&!['timeSpeed','distanceTime','distanceSpeed'].includes(x.targetMode)))throw Error('Etapa inválida');}}
  }return true;
 }
 async function importPlan(inp){
@@ -530,7 +539,7 @@ async function importPlan(inp){
 let ed=null;
 const NM={walk:'CAMINHADA',run:'CORRIDA',cool:'DESAQUECIMENTO'},DK={walk:5,run:10,cool:5};
 const TL={walk:'🚶 Caminhar',run:'🏃 Correr',cool:'❄️ Desaquec.'};
-const mk=(t,dur,name)=>({k:'s',name:name||NM[t],type:t,dur,kmh:DK[t]});
+const mk=(t,dur,name)=>({k:'s',name:name||NM[t],type:t,dur,kmh:DK[t],targetMode:'timeSpeed'});
 const fmtMS=x=>`${Math.floor(x/60)}:${String(x%60).padStart(2,'0')}`;
 const spVal=(s,u)=>!s.kmh?'':u==='pace'?fmtPace(s.kmh):(+s.kmh).toFixed(1).replace('.',',');
 const spEq=(s,u)=>!s.kmh?'sem ritmo':u==='pace'?fmtKmh(s.kmh)+' km/h':fmtPace(s.kmh)+' min/km';
@@ -538,26 +547,40 @@ const eS=(i,j)=>j<0?ed.data.items[i]:ed.data.items[i].steps[j];
 const eAR=(i,j)=>j<0?ed.data.items:ed.data.items[i].steps;
 const eId=(p,i,j)=>document.getElementById(p+i+'_'+j);
 const flat=d=>d.items.flatMap(it=>it.k==='s'?[{...it}]:Array.from({length:it.n},(_,r)=>it.steps.map(s=>({...s,name:`${s.name} (${r+1}/${it.n})`}))).flat());
-
+const stepTarget=s=>['timeSpeed','distanceTime','distanceSpeed'].includes(s.targetMode)?s.targetMode:(Number(s.distanceKm)>0?'distanceTime':'timeSpeed');
+const distanceParts=km=>{const meters=Math.round((Number(km)||0)*1000);return [Math.floor(meters/1000),meters%1000]};
+const distanceLabel=km=>{const [k,m]=distanceParts(km);return k&&m?`${k} km ${m} m`:k?`${k} km`:`${m} m`};
+const prettyDistance=km=>Number(km||0).toLocaleString('pt-BR',{maximumFractionDigits:2})+' km';
+const resolveStep=s=>{const mode=stepTarget(s),distance=Number(s.distanceKm)||0;
+ if(mode==='distanceTime'&&distance>0&&s.dur>0)s.kmh=distance*3600/s.dur;
+ if(mode==='distanceSpeed'&&distance>0&&s.kmh>0)s.dur=Math.max(1,Math.round(distance/s.kmh*3600));
+ return s;
+};
 function openEditor(i){
-  const w=plan.weeks[plan.cur];let d;
-  if(i===null)d={id:uid(),title:`Treino ${w.workouts.length+1}`,notes:'',unit:'kmh',items:[mk('walk',300,'AQUECIMENTO'),{k:'r',n:5,steps:[mk('run',180),mk('walk',120,'RECUPERAÇÃO')]},mk('cool',300,'DESAQUECIMENTO')]};
-  else{
-    d=JSON.parse(JSON.stringify(w.workouts[i]));
-    if(!d.items){d.unit=(d.steps.find(x=>x.mode)||{}).mode||'kmh';d.items=d.steps.map(x=>({k:'s',name:x.name,type:x.type,dur:x.dur,kmh:x.kmh||0,distanceKm:x.distanceKm||0}))}
-  }
-  ed={idx:i,data:d};renderEditor();document.getElementById('editor').classList.add('active');
+ const w=plan.weeks[plan.cur];let d;
+ if(i===null)d={id:uid(),title:`Treino ${w.workouts.length+1}`,notes:'',unit:'kmh',items:[mk('walk',300,'AQUECIMENTO'),{k:'r',n:5,steps:[mk('run',180),mk('walk',120,'RECUPERAÇÃO')]},mk('cool',300,'DESAQUECIMENTO')]};
+ else{
+  d=clone(w.workouts[i]);
+  if(!d.items){d.unit=(d.steps.find(x=>x.mode)||{}).mode||'kmh';d.items=d.steps.map(x=>({k:'s',name:x.name,type:x.type,dur:x.dur,kmh:x.kmh||0,distanceKm:x.distanceKm||0,targetMode:x.targetMode||(x.distanceKm?'distanceTime':'timeSpeed')}))}
+ }
+ d.items.forEach(it=>{const group=it.k==='r'?it.steps:[it];group.forEach(x=>{x.targetMode=stepTarget(x);resolveStep(x)})});
+ ed={idx:i,data:d};renderEditor();document.getElementById('editor').classList.add('active');
 }
 function closeEditor(){document.getElementById('editor').classList.remove('active');ed=null}
-const ibtn=(i,j)=>`<button onclick="eMv(${i},${j},-1)">↑</button><button onclick="eMv(${i},${j},1)">↓</button><button onclick="eCp(${i},${j})">⧉</button><button onclick="eRm(${i},${j})">✕</button>`;
+const ibtn=(i,j)=>`<button onclick="eMv(${i},${j},-1)" aria-label="Mover etapa para cima">↑</button><button onclick="eMv(${i},${j},1)" aria-label="Mover etapa para baixo">↓</button><button onclick="eCp(${i},${j})" aria-label="Duplicar etapa">⧉</button><button onclick="eRm(${i},${j})" aria-label="Excluir etapa">✕</button>`;
 function stepCard(s,i,j){
-  const u=ed.data.unit;
+  resolveStep(s);
+  const u=ed.data.unit,mode=stepTarget(s),[km,meters]=distanceParts(s.distanceKm);
+  const distanceControls=`<div class="distance-fields"><div class="cg"><label for="dk${i}_${j}">Quilômetros</label><select id="dk${i}_${j}" onchange="eDistanceParts(${i},${j})">${Array.from({length:201},(_,n)=>`<option value="${n}" ${n===km?'selected':''}>${n} km</option>`).join('')}</select></div><div class="cg"><label for="dm${i}_${j}">Metros</label><select id="dm${i}_${j}" onchange="eDistanceParts(${i},${j})">${Array.from({length:100},(_,n)=>`<option value="${n*10}" ${n*10===meters?'selected':''}>${n*10} m</option>`).join('')}</select></div></div>`;
+  const timeControl=`<div class="cg"><label>${mode==='distanceSpeed'?'Duração calculada':'Duração (min:seg)'}</label><div class="stp"><button ${mode==='distanceSpeed'?'disabled':''} onclick="eDur(${i},${j},-1)">−</button><input id="d${i}_${j}" value="${fmtMS(s.dur)}" ${mode==='distanceSpeed'?'readonly':'onchange="eDurT('+i+','+j+',this)"'}><button ${mode==='distanceSpeed'?'disabled':''} onclick="eDur(${i},${j},1)">+</button></div><small>${mode==='distanceSpeed'?'Distância ÷ velocidade':'Toque para digitar'}</small></div>`;
+  const speedControl=`<div class="cg"><label>${mode==='distanceTime'?'Velocidade calculada':u==='kmh'?'Velocidade (km/h)':'Ritmo (min/km)'}</label><div class="stp"><button ${mode==='distanceTime'?'disabled':''} onclick="eSp(${i},${j},-1)">−</button><input id="p${i}_${j}" ${mode==='distanceTime'?'readonly':`onchange="eSpT(${i},${j},this)"`} value="${spVal(s,u)}" inputmode="decimal" placeholder="—"><button ${mode==='distanceTime'?'disabled':''} onclick="eSp(${i},${j},1)">+</button></div><small id="q${i}_${j}">${spEq(s,u)}</small></div>`;
+  const effectiveDist=mode==='timeSpeed'?kmOf(s):Number(s.distanceKm)||0;
   return `<div class="sc sc-${s.type}"><div class="sc-h"><input class="sn" value="${esc(s.name)}" oninput="eS(${i},${j}).name=this.value"><span class="ib">${ibtn(i,j)}</span></div>
-  <div class="seg">${['walk','run','cool'].map(t=>`<button class="${s.type===t?'on '+t:''}" onclick="eType(${i},${j},'${t}')">${TL[t]}</button>`).join('')}</div>
-  <div class="ctl">
-    <div class="cg"><label>Duração (min:seg)</label><div class="stp"><button onclick="eDur(${i},${j},-1)">−</button><input id="d${i}_${j}" value="${fmtMS(s.dur)}" onchange="eDurT(${i},${j},this)"><button onclick="eDur(${i},${j},1)">+</button></div><small>toque para digitar</small></div>
-    <div class="cg"><label>Ritmo (${u==='kmh'?'km/h':'min/km'})</label><div class="stp"><button onclick="eSp(${i},${j},-1)">−</button><input id="p${i}_${j}" ${u==='kmh'?'inputmode="decimal"':''} placeholder="—" value="${spVal(s,u)}" onchange="eSpT(${i},${j},this)"><button onclick="eSp(${i},${j},1)">+</button></div><small id="q${i}_${j}">${spEq(s,u)}</small></div>
-   </div><div class="cg" style="grid-column:1/-1"><label>Distância planejada (km) · opcional</label><div class="stp"><input inputmode="decimal" placeholder="Ex.: 0,4" value="${s.distanceKm?rnd(s.distanceKm,3):''}" onchange="eDistance(${i},${j},this)"></div><small>Se informar distância e tempo, a velocidade/pace será calculada automaticamente.</small></div></div>`;
+    <div class="seg">${['walk','run','cool'].map(t=>`<button class="${s.type===t?'on '+t:''}" onclick="eType(${i},${j},'${t}')">${TL[t]}</button>`).join('')}</div>
+    <div class="goal-mode"><label for="mode${i}_${j}">Como definir esta etapa?</label><select id="mode${i}_${j}" onchange="eTargetMode(${i},${j},this.value)"><option value="timeSpeed" ${mode==='timeSpeed'?'selected':''}>Tempo + velocidade / pace</option><option value="distanceTime" ${mode==='distanceTime'?'selected':''}>Distância + tempo → calcular velocidade / pace</option><option value="distanceSpeed" ${mode==='distanceSpeed'?'selected':''}>Distância + velocidade / pace → calcular tempo</option></select></div>
+    ${mode!=='timeSpeed'?distanceControls:''}<div class="ctl">${timeControl}${speedControl}</div>
+    <div class="goal-readout">🎯 ${mode==='timeSpeed'?'Distância estimada: ':'Distância alvo: '}${distanceLabel(effectiveDist)} · ${fmtT(s.dur)}<small>Velocidade ${s.kmh?fmtKmh(s.kmh)+' km/h · pace '+fmtPace(s.kmh)+' min/km':'não definida'}${mode==='distanceSpeed'?' · duração arredondada ao segundo':''}</small></div>
+  </div>`;
 }
 
 function renderEditor(){
@@ -574,40 +597,39 @@ function renderEditor(){
   eSum();
 }
 function eSum(){
-  const f=flat(ed.data),t=f.reduce((a,x)=>a+x.dur,0),r=f.filter(x=>x.type==='run').reduce((a,x)=>a+x.dur,0),km=f.reduce((a,x)=>a+x.dur/3600*(x.kmh||0),0);
-  document.getElementById('sum').innerHTML=`<div class="tl big">${f.map(x=>`<i class="t-${x.type}" style="flex:${x.dur}"></i>`).join('')}</div><div class="sumtxt">⏱ ${fmtT(t)} · 🏃 ${fmtT(r)} correndo${km?` · ≈ ${km.toFixed(1).replace('.',',')} km`:''} · ${f.length} etapas</div>`;
+  const f=flat(ed.data).map(x=>resolveStep(x)),t=f.reduce((a,x)=>a+x.dur,0),r=f.filter(x=>x.type==='run').reduce((a,x)=>a+x.dur,0),km=f.reduce((a,x)=>a+kmOf(x),0);
+  document.getElementById('sum').innerHTML=`<div class="tl big">${f.map(x=>`<i class="t-${x.type}" style="flex:${x.dur}"></i>`).join('')}</div><div class="sumtxt">⏱ ${fmtT(t)} · 🏃 ${fmtT(r)} correndo · ≈ ${rnd(km,2)} km · ${f.length} etapas</div>`;
 }
-function eDur(i,j,dir){const s=eS(i,j);s.dur=Math.max(5,s.dur+dir*15);if(s.distanceKm)s.kmh=s.distanceKm*3600/s.dur;renderEditor()}
-function eDurT(i,j,el){
-  const v=el.value.trim().replace(',','.'),m=v.match(/^(\d+):(\d{1,2})$/),t=m?+m[1]*60+ +m[2]:Math.round(parseFloat(v)*60),s=eS(i,j);
-  if(t>0)s.dur=t;if(s.distanceKm)s.kmh=s.distanceKm*3600/s.dur;el.value=fmtMS(s.dur);renderEditor();
-}
-function eSp(i,j,dir){
-  const s=eS(i,j),u=ed.data.unit;
-  if(!s.kmh)s.kmh=DK[s.type];
-  else if(u==='kmh')s.kmh=Math.max(1,Math.round((s.kmh+dir*.1)*10)/10);
-  else s.kmh=3600/Math.max(120,Math.min(1200,Math.round(3600/s.kmh)+dir*5));
-  s.distanceKm=0;eSpShow(i,j);
-}
-function eSpT(i,j,el){const s=eS(i,j);s.kmh=parseVal(ed.data.unit,el.value);s.distanceKm=0;eSpShow(i,j)}
-function eSpShow(i,j){const s=eS(i,j),u=ed.data.unit;eId('p',i,j).value=spVal(s,u);eId('q',i,j).textContent=spEq(s,u);eSum()}
-function eDistance(i,j,el){const s=eS(i,j),v=Number(String(el.value).replace(',','.'));if(!Number.isFinite(v)||v<0||v>200)return appInfo('Distância inválida');if(v&&v*3600/s.dur>40)return appInfo('Essa distância exigiria mais de 40 km/h. Ajuste o tempo ou a distância.');s.distanceKm=v;if(s.distanceKm&&s.dur>0)s.kmh=s.distanceKm*3600/s.dur;renderEditor()}
+function eTargetMode(i,j,mode){const s=eS(i,j);if(!['timeSpeed','distanceTime','distanceSpeed'].includes(mode))return;
+ if(mode!=='timeSpeed'&&!s.distanceKm)s.distanceKm=Math.max(.01,Math.round(kmOf(s)*100)/100);
+ s.targetMode=mode;resolveStep(s);renderEditor();}
+function eDistanceParts(i,j){const s=eS(i,j);const k=Number(eId('dk',i,j).value),m=Number(eId('dm',i,j).value),dist=k+m/1000;
+ if(dist<=0||dist>200)return appInfo('Informe uma distância entre 10 m e 200 km.');
+ const previous={distanceKm:s.distanceKm,dur:s.dur,kmh:s.kmh};s.distanceKm=dist;resolveStep(s);
+ if(!Number.isFinite(s.kmh)||s.kmh>40||s.kmh<=0||s.dur>86400){Object.assign(s,previous);renderEditor();return appInfo('Essa combinação exige velocidade ou duração fora dos limites. Ajuste o tempo, pace ou distância.')}
+ renderEditor();}
+function eDur(i,j,dir){const s=eS(i,j);if(stepTarget(s)==='distanceSpeed')return;s.dur=Math.max(5,s.dur+dir*15);resolveStep(s);renderEditor()}
+function eDurT(i,j,el){const s=eS(i,j);if(stepTarget(s)==='distanceSpeed')return;const v=el.value.trim().replace(',','.'),m=v.match(/^(\d+):(\d{1,2})$/),t=m?+m[1]*60+ +m[2]:Math.round(parseFloat(v)*60);if(Number.isFinite(t)&&t>0)s.dur=t;resolveStep(s);renderEditor()}
+function eSp(i,j,dir){const s=eS(i,j),u=ed.data.unit;if(stepTarget(s)==='distanceTime')return;
+ if(!s.kmh)s.kmh=DK[s.type];else if(u==='kmh')s.kmh=Math.max(.1,Math.round((s.kmh+dir*.1)*10)/10);else s.kmh=3600/Math.max(120,Math.min(1200,Math.round(3600/s.kmh)+dir*5));resolveStep(s);renderEditor()}
+function eSpT(i,j,el){const s=eS(i,j);if(stepTarget(s)==='distanceTime')return;const v=parseVal(ed.data.unit,el.value);if(v>0)s.kmh=v;resolveStep(s);renderEditor()}
+function eSpShow(i,j){renderEditor()}
 function eN(i,dir){const it=ed.data.items[i];it.n=Math.max(1,Math.min(99,it.n+dir));document.getElementById('n'+i).textContent=it.n+'×';eSum()}
 function eUnit(u){ed.data.unit=u;renderEditor()}
 function eType(i,j,t){const s=eS(i,j);if(s.name===NM[s.type])s.name=NM[t];if(s.kmh===DK[s.type])s.kmh=DK[t];s.type=t;renderEditor()}
 function eMv(i,j,d){const a=eAR(i,j),k=j<0?i:j,n=k+d;if(n<0||n>=a.length)return;[a[k],a[n]]=[a[n],a[k]];renderEditor()}
-function eCp(i,j){const a=eAR(i,j),k=j<0?i:j;a.splice(k+1,0,JSON.parse(JSON.stringify(a[k])));renderEditor()}
+function eCp(i,j){const a=eAR(i,j),k=j<0?i:j;a.splice(k+1,0,clone(a[k]));renderEditor()}
 function eRm(i,j){const a=eAR(i,j),k=j<0?i:j;a.splice(k,1);if(j>=0&&!a.length)ed.data.items.splice(i,1);renderEditor()}
 function eScroll(){const e=document.getElementById('editor');e.scrollTo({top:e.scrollHeight,behavior:'smooth'})}
 function eAdd(t){ed.data.items.push(mk(t,300));renderEditor();eScroll()}
 function eAddIn(i){ed.data.items[i].steps.push(mk('walk',60));renderEditor()}
 function eAddRep(){ed.data.items.push({k:'r',n:5,steps:[mk('run',180),mk('walk',120,'RECUPERAÇÃO')]});renderEditor();eScroll()}
 function saveWorkout(){
-  const d=ed.data,f=flat(d).filter(x=>x.dur>0);
+  const d=ed.data,f=flat(d).map(x=>resolveStep(x)).filter(x=>x.dur>0);
   if(!f.length)return appInfo('Adicione ao menos uma etapa.');
-  if(f.some(x=>!Number.isFinite(x.kmh)||x.kmh<0||x.kmh>40))return appInfo('Há uma velocidade inválida. Verifique as distâncias e durações.');
+  if(f.some(x=>!Number.isFinite(x.kmh)||x.kmh<=0||x.kmh>40||!Number.isFinite(x.dur)||x.dur>86400||(stepTarget(x)!=='timeSpeed'&&!(x.distanceKm>0))))return appInfo('Verifique a distância, a duração e a velocidade em cada etapa.');
   d.title=d.title.trim()||'Treino';
-  d.steps=f.map(x=>({name:x.name,type:x.type,dur:x.dur,kmh:x.kmh||0,mode:x.kmh?d.unit:'',...(x.distanceKm?{distanceKm:x.distanceKm}:{})}));
+  d.steps=f.map(x=>({name:x.name,type:x.type,dur:x.dur,kmh:x.kmh||0,mode:x.kmh?d.unit:'',targetMode:stepTarget(x),...(stepTarget(x)!=='timeSpeed'&&x.distanceKm?{distanceKm:x.distanceKm}:{})}));
   const w=plan.weeks[plan.cur];
   ed.idx===null?w.workouts.push(d):w.workouts[ed.idx]=d;
   closeEditor();save();render();
@@ -661,7 +683,7 @@ function tickOnce(){
 const spoken=s=>!s.kmh?'':(s.mode==='pace'?`Pace ${fmtPace(s.kmh).replace(':',' e ')} por quilômetro.`:`${fmtKmh(s.kmh)} quilômetros por hora.`);
 function voiceEnabled(key){return appSettings.voice!==false&&appSettings.voiceOptions?.[key]!==false}
 function announceStage(step){if(!voiceEnabled('stage'))return;let msg='Início de '+step.name+'. ';if(voiceEnabled('speed'))msg+=spoken(step);if(voiceEnabled('duration'))msg+=' Duração '+fmtT(step.dur)+'.';speak(msg)}
-function changeLiveSpeed(delta){if(!cw)return;const s=cw.steps[cStep];const k=Math.max(0,Math.min(40,Math.round(((Number(s.kmh)||0)+delta)*10)/10));s.kmh=k;s.distanceKm=0;liveSpeeds[cStep]=k;updateUI();persistSession();if(voiceEnabled('speed'))speak('Velocidade ajustada para '+fmtKmh(k)+' quilômetros por hora.');}
+function changeLiveSpeed(delta){if(!cw)return;const s=cw.steps[cStep];const k=Math.max(0,Math.min(40,Math.round(((Number(s.kmh)||0)+delta)*10)/10));s.kmh=k;s.distanceKm=0;s.targetMode='timeSpeed';liveSpeeds[cStep]=k;updateUI();persistSession();if(voiceEnabled('speed'))speak('Velocidade ajustada para '+fmtKmh(k)+' quilômetros por hora.');}
 
 function prevStep(){if(cStep>0){cStep--;resetStep()}}
 function repeatStep(){resetStep()}
@@ -715,29 +737,25 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventLi
 function intervalSummary(wo){
  const steps=Array.isArray(wo.steps)?wo.steps:[];
  if(!steps.length)return 'Nenhuma etapa';
- const same=(a,b)=>a.type===b.type && a.dur===b.dur && Math.abs((Number(a.kmh)||0)-(Number(b.kmh)||0))<0.02 && Math.abs((Number(a.distanceKm)||0)-(Number(b.distanceKm)||0))<0.001;
- const duration=seconds=>{const m=Math.floor(seconds/60),r=seconds%60;return r?`${m}:${String(r).padStart(2,'0')}`:`${m}min`};
- const detail=x=>`${duration(x.dur)}${x.kmh?' a '+fmtKmh(x.kmh):''}`;
+ const same=(a,b)=>a.type===b.type&&a.dur===b.dur&&Math.abs((Number(a.kmh)||0)-(Number(b.kmh)||0))<0.02&&Math.abs((Number(a.distanceKm)||0)-(Number(b.distanceKm)||0))<0.001&&stepTarget(a)===stepTarget(b);
+ const duration=seconds=>{const m=Math.floor(seconds/60),r=seconds%60;return r?`${m}:${String(r).padStart(2,'0')}`:`${m} min`};
+ const detail=x=>{const dist=Number(x.distanceKm)||0,sp=Number(x.kmh)||0;
+  const target=stepTarget(x)!=='timeSpeed'&&dist>0?distanceLabel(dist)+' em '+duration(x.dur):duration(x.dur);
+  const vel=sp?(x.mode==='pace'?fmtPace(sp)+' min/km':fmtKmh(sp)+' km/h'):'';
+  return `${target}${vel?' · '+vel:''}`;
+ };
  const title=x=>{const n=String(x.name||'').toLowerCase();return /aquec/.test(n)?'Aquecimento':/desaquec|soltura/.test(n)||x.type==='cool'?'Desaquecimento':/recuper|descanso/.test(n)?'Recuperação':x.type==='walk'?'Caminhada':'Corrida'};
  const result=[];
  for(let i=0;i<steps.length;){
    let best=null;
-   // Encontra blocos repetidos consecutivamente, inclusive A/B/A/B/A/B.
    for(let len=1;len<=Math.min(6,Math.floor((steps.length-i)/2));len++){
-     let reps=1;
-     while(i+(reps+1)*len<=steps.length&&steps.slice(i,i+len).every((x,k)=>same(x,steps[i+reps*len+k])))reps++;
+     let reps=1;while(i+(reps+1)*len<=steps.length&&steps.slice(i,i+len).every((x,k)=>same(x,steps[i+reps*len+k])))reps++;
      if(reps>=2&&(!best||reps*len>best.covered||(reps*len===best.covered&&len<best.len)))best={len,reps,covered:reps*len};
    }
-   if(best){
-     const items=steps.slice(i,i+best.len);
-     const txt=items.map(x=>detail(x)).join(' + ');
-     result.push(`${best.reps}× (${txt}) km/h`);
-     i+=best.covered;
-   }else{
-     const x=steps[i];const label=(i===steps.length-1&&i>0&&x.dur<=600&&((x.kmh||0)<(steps[i-1].kmh||0)||x.type==='cool'))?'Desaquecimento':title(x);result.push(`${label} ${detail(x)}${x.kmh?' km/h':''}`);i++;
-   }
+   if(best){const items=steps.slice(i,i+best.len);result.push(`${best.reps}× (${items.map(x=>detail(x)).join(' + ')})`);i+=best.covered}
+   else{const x=steps[i];result.push(`${title(x)} — ${detail(x)}`);i++}
  }
- return result.join(' · ');
+ return result.join(' | ');
 }
 function renderResume(){const el=document.getElementById('resumeBox');dbGet('session').then(session=>{if(!el)return;
  if(!session||!session.workoutId){el.style.display='none';return}
